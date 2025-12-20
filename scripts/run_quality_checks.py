@@ -1,19 +1,16 @@
 #!/usr/bin/env python3
 """
-CLI script to run data quality checks on pipeline data.
+CLI script to run data quality checks.
 
 Usage:
-    # Run all checks for yesterday
-    python scripts/run_quality_checks.py --project-id PROJECT_ID
+    # Run all quality checks
+    python scripts/run_quality_checks.py
 
-    # Run checks for specific date
-    python scripts/run_quality_checks.py --project-id PROJECT_ID --date 2024-01-15
+    # Run for specific date
+    python scripts/run_quality_checks.py --date 2024-01-15
 
-    # Run checks on a specific table
-    python scripts/run_quality_checks.py --project-id PROJECT_ID --table daily_summary
-
-    # Output results as JSON
-    python scripts/run_quality_checks.py --project-id PROJECT_ID --json
+    # Run specific table checks
+    python scripts/run_quality_checks.py --table bot_requests_daily
 """
 
 import argparse
@@ -26,11 +23,8 @@ from pathlib import Path
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from llm_bot_pipeline.monitoring import (
-    DataQualityChecker,
-    DataQualityReport,
-    QualityStatus,
-)
+from llm_bot_pipeline.pipeline import setup_logging
+from llm_bot_pipeline.storage import get_backend
 
 
 def parse_date(date_str: str) -> date:
@@ -43,164 +37,157 @@ def parse_date(date_str: str) -> date:
         )
 
 
-def print_report(report: DataQualityReport, verbose: bool = False) -> None:
-    """Print quality report in human-readable format."""
-    # Status emoji
-    status_emoji = {
-        QualityStatus.PASS: "✅",
-        QualityStatus.WARN: "⚠️",
-        QualityStatus.FAIL: "❌",
-        QualityStatus.SKIP: "⏭️",
-    }
-
-    print()
-    print("=" * 60)
-    print(f"📊 Data Quality Report: {report.table_name}")
-    print("=" * 60)
-    print(f"Check Date: {report.check_date}")
-    print(
-        f"Overall Status: {status_emoji.get(report.overall_status, '❓')} {report.overall_status.value.upper()}"
-    )
-    print()
-
-    # Summary
-    summary = report.summary
-    print(
-        f"Summary: {summary['passed']} passed, {summary['warnings']} warnings, "
-        f"{summary['failed']} failed, {summary['skipped']} skipped"
-    )
-    print()
-
-    # Individual checks
-    print("Check Results:")
-    print("-" * 60)
-
-    for result in report.results:
-        emoji = status_emoji.get(result.status, "❓")
-        print(f"  {emoji} {result.check_name}: {result.message}")
-
-        if verbose and result.details:
-            for key, value in result.details.items():
-                if key not in ("table_id", "error"):
-                    print(f"      {key}: {value}")
-
-    print()
-
-
 def main():
     """Main entry point."""
     parser = argparse.ArgumentParser(
-        description="Run data quality checks on pipeline data",
+        description="Run data quality checks",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Run all checks for yesterday
-  python scripts/run_quality_checks.py --project-id my-project
+  # Run all quality checks
+  python scripts/run_quality_checks.py
 
-  # Run checks for specific date
-  python scripts/run_quality_checks.py --project-id my-project --date 2024-01-15
+  # Run for specific date
+  python scripts/run_quality_checks.py --date 2024-01-15
 
-  # Run checks on daily_summary table
-  python scripts/run_quality_checks.py --project-id my-project --table daily_summary
+  # Run specific table checks
+  python scripts/run_quality_checks.py --table bot_requests_daily
 
-  # Output JSON results
-  python scripts/run_quality_checks.py --project-id my-project --json
+  # Output as JSON
+  python scripts/run_quality_checks.py --json
         """,
     )
 
-    # Required arguments
     parser.add_argument(
-
-    # Optional arguments
+        "--db-path",
+        type=Path,
+        help="Path to SQLite database (default: data/llm-bot-logs.db)",
+    )
     parser.add_argument(
         "--date",
         type=parse_date,
-        default=None,
-        help="Date to check (YYYY-MM-DD, default: yesterday)",
+        help="Date to check (YYYY-MM-DD)",
     )
     parser.add_argument(
         "--table",
-        default="bot_requests_daily",
-        help="Table name to check (default: bot_requests_daily)",
-    )
-    parser.add_argument(
-        "--credentials",
-        type=str,
-        default=None,
-        help="Path to service account JSON key file",
-    )
-    parser.add_argument(
-        "--dataset",
-        default="llm_report",
-        help="Dataset name (default: llm_report)",
+        choices=["bot_requests_raw", "bot_requests_daily", "query_fanout_sessions"],
+        help="Specific table to check",
     )
     parser.add_argument(
         "--json",
         action="store_true",
-        help="Output results as JSON",
+        help="Output as JSON",
     )
     parser.add_argument(
         "--verbose",
         "-v",
         action="store_true",
-        help="Show detailed check information",
-    )
-    parser.add_argument(
-        "--skip-variance",
-        action="store_true",
-        help="Skip variance check (useful for new tables)",
+        help="Enable verbose logging",
     )
 
     args = parser.parse_args()
 
-    # Setup logging
-    logging.basicConfig(
-        level=logging.DEBUG if args.verbose else logging.WARNING,
-        format="%(asctime)s | %(levelname)-8s | %(message)s",
-    )
+    setup_logging(level=logging.DEBUG if args.verbose else logging.INFO)
+    logger = logging.getLogger(__name__)
 
-    # Determine check date
-    check_date = args.date or (date.today() - timedelta(days=1))
+    # Initialize backend
+    kwargs = {}
+    if args.db_path:
+        kwargs["db_path"] = args.db_path
+    backend = get_backend("sqlite", **kwargs)
+    backend.initialize()
 
-    # Initialize checker
-    credentials_path = Path(args.credentials) if args.credentials else None
-
-    try:
-        checker = DataQualityChecker(
-            project_id=args.project_id,
-            credentials_path=credentials_path,
-            dataset_report=args.dataset,
-        )
-    except Exception as e:
-        print(f"❌ Failed to initialize checker: {e}", file=sys.stderr)
-        return 1
-
-    # Run checks
     if not args.json:
-        print(f"\n🔍 Running data quality checks for {check_date}...")
+        print()
+        print("🔍 Data Quality Checks")
+        print("=" * 50)
+        print(f"  Backend: sqlite")
+        if args.db_path:
+            print(f"  Database: {args.db_path}")
+        if args.date:
+            print(f"  Date: {args.date}")
+        if args.table:
+            print(f"  Table: {args.table}")
+        print()
 
     try:
-        report = checker.run_all_checks(
-            table_name=args.table,
-            check_date=check_date,
-            skip_variance=args.skip_variance,
+        checks = {}
+        tables = (
+            [args.table]
+            if args.table
+            else ["bot_requests_raw", "bot_requests_daily", "query_fanout_sessions"]
         )
-    except Exception as e:
-        print(f"❌ Quality check failed: {e}", file=sys.stderr)
-        return 1
 
-    # Output results
-    if args.json:
-        print(json.dumps(report.to_dict(), indent=2))
-    else:
-        print_report(report, verbose=args.verbose)
+        for table in tables:
+            if not backend.table_exists(table):
+                checks[table] = {"exists": False, "row_count": 0}
+                continue
 
-    # Exit code based on result
-    if report.overall_status == QualityStatus.FAIL:
-        return 1
-    return 0
+            # Get row count
+            row_count = backend.get_table_row_count(table)
+
+            # Get date range if applicable
+            date_range = None
+            if table in ("bot_requests_daily", "query_fanout_sessions"):
+                date_col = (
+                    "request_date" if table == "bot_requests_daily" else "session_date"
+                )
+                result = backend.query(
+                    f"SELECT MIN({date_col}) as min_date, MAX({date_col}) as max_date FROM {table}"
+                )
+                if result:
+                    date_range = {
+                        "min": result[0]["min_date"],
+                        "max": result[0]["max_date"],
+                    }
+
+            checks[table] = {
+                "exists": True,
+                "row_count": row_count,
+                "date_range": date_range,
+            }
+
+            # Additional checks for specific date
+            if args.date and table in ("bot_requests_daily", "query_fanout_sessions"):
+                date_col = (
+                    "request_date" if table == "bot_requests_daily" else "session_date"
+                )
+                result = backend.query(
+                    f"SELECT COUNT(*) as count FROM {table} WHERE {date_col} = :date",
+                    {"date": args.date.isoformat()},
+                )
+                checks[table]["date_count"] = result[0]["count"] if result else 0
+
+        if args.json:
+            print(json.dumps(checks, indent=2, default=str))
+        else:
+            all_ok = True
+            for table, info in checks.items():
+                print(f"\n📋 {table}")
+                print("-" * 40)
+                if not info["exists"]:
+                    print("  ⚠️  Table does not exist")
+                    all_ok = False
+                else:
+                    print(f"  Rows: {info['row_count']:,}")
+                    if info.get("date_range"):
+                        print(
+                            f"  Date range: {info['date_range']['min']} to {info['date_range']['max']}"
+                        )
+                    if "date_count" in info:
+                        print(f"  Records for {args.date}: {info['date_count']:,}")
+
+            print()
+            if all_ok:
+                print("✅ All quality checks passed")
+            else:
+                print("⚠️  Some issues found")
+
+        return 0
+
+    finally:
+        backend.close()
 
 
 if __name__ == "__main__":
     sys.exit(main())
-

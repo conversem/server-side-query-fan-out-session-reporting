@@ -1,51 +1,43 @@
-"""Database schema definitions."""
+"""Schemas for LLM bot traffic data storage."""
 
 from .bundles import (
-    CONFIDENCE_THRESHOLDS,
-    QUERY_FANOUT_SESSIONS_CLUSTERING_FIELDS,
-    QUERY_FANOUT_SESSIONS_INDEXES,
-    QUERY_FANOUT_SESSIONS_PARTITION_FIELD,
-    QUERY_FANOUT_SESSIONS_SCHEMA,
-    QUERY_FANOUT_SESSIONS_SQLITE_SCHEMA,
-    get_confidence_level,
+    QUERY_FANOUT_SESSIONS_COLUMNS,
+    QueryFanoutSession,
+    get_create_sessions_table_sql,
 )
 from .clean import (
-    CLEAN_SCHEMA,
-    CLEAN_TABLE_CLUSTERING_FIELDS,
-    CLEAN_TABLE_PARTITION_FIELD,
+    CLEAN_BOT_REQUESTS_COLUMNS,
+    get_create_clean_table_sql,
 )
-from .raw import RAW_SCHEMA
+from .raw import (
+    RAW_BOT_REQUESTS_COLUMNS,
+    get_create_raw_table_sql,
+)
 from .reporting import (
-    DAILY_SUMMARY_CLUSTERING_FIELDS,
-    DAILY_SUMMARY_PARTITION_FIELD,
-    DAILY_SUMMARY_SCHEMA,
-    DATA_FRESHNESS_SCHEMA,
-    URL_PERFORMANCE_CLUSTERING_FIELDS,
-    URL_PERFORMANCE_PARTITION_FIELD,
-    URL_PERFORMANCE_SCHEMA,
+    BOT_PROVIDER_SUMMARY_COLUMNS,
+    DAILY_SUMMARY_COLUMNS,
+    URL_PERFORMANCE_COLUMNS,
+    get_create_bot_provider_summary_sql,
+    get_create_daily_summary_sql,
+    get_create_url_performance_sql,
 )
 
 __all__ = [
-    # Raw
-    "RAW_SCHEMA",
-    # Clean
-    "CLEAN_SCHEMA",
-    "CLEAN_TABLE_PARTITION_FIELD",
-    "CLEAN_TABLE_CLUSTERING_FIELDS",
+    # Raw schema
+    "RAW_BOT_REQUESTS_COLUMNS",
+    "get_create_raw_table_sql",
+    # Clean schema
+    "CLEAN_BOT_REQUESTS_COLUMNS",
+    "get_create_clean_table_sql",
+    # Session bundles
+    "QUERY_FANOUT_SESSIONS_COLUMNS",
+    "QueryFanoutSession",
+    "get_create_sessions_table_sql",
     # Reporting
-    "DAILY_SUMMARY_SCHEMA",
-    "DAILY_SUMMARY_PARTITION_FIELD",
-    "DAILY_SUMMARY_CLUSTERING_FIELDS",
-    "URL_PERFORMANCE_SCHEMA",
-    "URL_PERFORMANCE_PARTITION_FIELD",
-    "URL_PERFORMANCE_CLUSTERING_FIELDS",
-    "DATA_FRESHNESS_SCHEMA",
-    # Query Fan-Out Sessions
-    "QUERY_FANOUT_SESSIONS_SCHEMA",
-    "QUERY_FANOUT_SESSIONS_PARTITION_FIELD",
-    "QUERY_FANOUT_SESSIONS_CLUSTERING_FIELDS",
-    "QUERY_FANOUT_SESSIONS_SQLITE_SCHEMA",
-    "QUERY_FANOUT_SESSIONS_INDEXES",
-    "CONFIDENCE_THRESHOLDS",
-    "get_confidence_level",
+    "DAILY_SUMMARY_COLUMNS",
+    "URL_PERFORMANCE_COLUMNS",
+    "BOT_PROVIDER_SUMMARY_COLUMNS",
+    "get_create_daily_summary_sql",
+    "get_create_url_performance_sql",
+    "get_create_bot_provider_summary_sql",
 ]

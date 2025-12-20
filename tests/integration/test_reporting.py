@@ -293,4 +293,3 @@ class TestFreshnessStats:
 
         assert stats["daily_summary"]["total_rows"] > 0
         assert stats["url_performance"]["total_rows"] > 0
-

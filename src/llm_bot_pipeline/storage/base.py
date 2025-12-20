@@ -233,4 +233,3 @@ class SchemaError(StorageError):
     """Raised when there's a schema-related error."""
 
     pass
-

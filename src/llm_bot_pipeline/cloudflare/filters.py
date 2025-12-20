@@ -61,4 +61,3 @@ def get_llm_bot_user_agent_patterns() -> list[str]:
         List of bot name patterns to match in user-agent
     """
     return LLM_BOT_NAMES.copy()
-

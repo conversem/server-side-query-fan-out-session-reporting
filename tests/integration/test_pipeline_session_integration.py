@@ -29,7 +29,7 @@ from llm_bot_pipeline.storage import get_backend
 def db_with_raw_data(tmp_path):
     """Create database with raw bot request data for testing."""
     db_path = tmp_path / "test_pipeline.db"
-    backend = get_backend(backend_type="sqlite", db_path=db_path)
+    backend = get_backend(db_path=db_path)
     backend.initialize()
 
     # Create query_fanout_sessions table
@@ -198,7 +198,6 @@ class TestRunSessionAggregation:
         from run_pipeline import run_session_aggregation
 
         result = run_session_aggregation(
-            backend_type="sqlite",
             db_path=db_path,
             start_date=date(2025, 1, 15),
             end_date=date(2025, 1, 15),
@@ -222,7 +221,6 @@ class TestRunSessionAggregation:
         from run_pipeline import run_session_aggregation
 
         result = run_session_aggregation(
-            backend_type="sqlite",
             db_path=db_path,
             start_date=date(2025, 1, 15),
             end_date=date(2025, 1, 15),
@@ -241,7 +239,6 @@ class TestRunSessionAggregation:
         from run_pipeline import run_session_aggregation
 
         result = run_session_aggregation(
-            backend_type="sqlite",
             db_path=db_path,
             start_date=date(2025, 1, 15),
             end_date=date(2025, 1, 15),
@@ -263,7 +260,6 @@ class TestRunSessionAggregation:
 
         # Query a date range with no data
         result = run_session_aggregation(
-            backend_type="sqlite",
             db_path=db_path,
             start_date=date(2030, 1, 1),
             end_date=date(2030, 1, 31),
@@ -308,7 +304,6 @@ class TestRunSessionAggregation:
         from run_pipeline import run_session_aggregation
 
         result = run_session_aggregation(
-            backend_type="sqlite",
             db_path=db_path,
             start_date=date(2025, 1, 15),
             end_date=date(2025, 1, 15),
@@ -388,7 +383,6 @@ class TestSessionReprocessing:
 
         # First run
         result1 = run_session_aggregation(
-            backend_type="sqlite",
             db_path=db_path,
             start_date=date(2025, 1, 15),
             end_date=date(2025, 1, 15),
@@ -405,7 +399,6 @@ class TestSessionReprocessing:
 
         # Second run (should delete and recreate)
         result2 = run_session_aggregation(
-            backend_type="sqlite",
             db_path=db_path,
             start_date=date(2025, 1, 15),
             end_date=date(2025, 1, 15),

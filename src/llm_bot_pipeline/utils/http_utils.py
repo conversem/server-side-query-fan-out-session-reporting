@@ -70,4 +70,3 @@ def is_error_status(status_code: Optional[int]) -> bool:
         True if status is in 4xx or 5xx range
     """
     return status_code is not None and status_code >= 400
-

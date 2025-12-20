@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "llm-bot-pipeline"
 version = "0.1.0"
-description = "Cloudflare Logpush to BigQuery pipeline for LLM bot traffic analysis"
+description = "Server-side query fan-out session reporting for LLM bot traffic analysis"
 readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "Proprietary"}

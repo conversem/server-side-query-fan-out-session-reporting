@@ -1,4 +1,4 @@
-# Docker Compose for Cloudflare Logpush Pipeline
+# Docker Compose for LLM Bot Traffic Analysis Pipeline
 # Usage:
 #   docker compose run --rm app bash           # Interactive shell
 #   docker compose run --rm app gcloud init    # Initialize gcloud

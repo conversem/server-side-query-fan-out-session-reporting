@@ -158,4 +158,3 @@ class TestQueryOperations:
             "UPDATE raw_bot_requests SET BotScore = 99 WHERE ClientCountry = 'XX'"
         )
         assert affected == 0
-

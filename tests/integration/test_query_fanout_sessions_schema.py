@@ -13,10 +13,10 @@ from datetime import datetime
 
 import pytest
 
-from llm_bot_pipeline.schemas.bundles import (
-    QUERY_FANOUT_SESSIONS_INDEXES,
-    QUERY_FANOUT_SESSIONS_SQLITE_SCHEMA,
-)
+from llm_bot_pipeline.schemas.bundles import QUERY_FANOUT_SESSIONS_INDEXES
+
+# QUERY_FANOUT_SESSIONS_COLUMNS used for reference only
+# from llm_bot_pipeline.schemas.bundles import (
 
 
 class TestQueryFanoutSessionsSchema:

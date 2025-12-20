@@ -6,76 +6,42 @@ which group temporally-clustered requests that likely originated from
 a single user question to an LLM.
 """
 
-from google.cloud import database
+from dataclasses import dataclass
+from datetime import datetime
+from typing import Optional
 
 # =============================================================================
-# Query Fan-Out Sessions Schema
+# Query Fan-Out Sessions Schema (SQLite)
 # =============================================================================
 
-QUERY_FANOUT_SESSIONS_SCHEMA = [
+QUERY_FANOUT_SESSIONS_COLUMNS = {
     # Session identification
-    database.SchemaField("session_id", "STRING", mode="REQUIRED"),
-    database.SchemaField("session_date", "DATE", mode="REQUIRED"),
+    "session_id": "TEXT PRIMARY KEY",
+    "session_date": "DATE NOT NULL",
     # Temporal bounds
-    database.SchemaField("session_start_time", "TIMESTAMP", mode="REQUIRED"),
-    database.SchemaField("session_end_time", "TIMESTAMP", mode="REQUIRED"),
-    database.SchemaField("duration_ms", "INTEGER", mode="REQUIRED"),
+    "session_start_time": "TIMESTAMP NOT NULL",
+    "session_end_time": "TIMESTAMP NOT NULL",
+    "duration_ms": "INTEGER NOT NULL",
     # Bot identification
-    database.SchemaField("bot_provider", "STRING", mode="REQUIRED"),
-    database.SchemaField("bot_name", "STRING", mode="NULLABLE"),
+    "bot_provider": "TEXT NOT NULL",
+    "bot_name": "TEXT",
     # Request metrics
-    database.SchemaField("request_count", "INTEGER", mode="REQUIRED"),
-    database.SchemaField("unique_urls", "INTEGER", mode="REQUIRED"),
+    "request_count": "INTEGER NOT NULL",
+    "unique_urls": "INTEGER NOT NULL",
     # Semantic coherence metrics
-    database.SchemaField("mean_cosine_similarity", "FLOAT64", mode="NULLABLE"),
-    database.SchemaField("min_cosine_similarity", "FLOAT64", mode="NULLABLE"),
-    database.SchemaField("max_cosine_similarity", "FLOAT64", mode="NULLABLE"),
-    # Confidence classification
-    database.SchemaField(
-        "confidence_level", "STRING", mode="REQUIRED"
-    ),  # 'high', 'medium', 'low'
-    # Session naming (derived from first URL)
-    database.SchemaField("fanout_session_name", "STRING", mode="NULLABLE"),
-    # URL data (JSON array)
-    database.SchemaField("url_list", "STRING", mode="REQUIRED"),  # JSON array
-    # Configuration used
-    database.SchemaField("window_ms", "FLOAT64", mode="REQUIRED"),
+    "mean_cosine_similarity": "REAL",
+    "min_cosine_similarity": "REAL",
+    "max_cosine_similarity": "REAL",
+    "thematic_variance": "REAL",
+    # Classification
+    "confidence_level": "TEXT",
+    # Human-readable
+    "fanout_session_name": "TEXT",
+    # Data storage
+    "url_list": "TEXT",  # JSON array
     # Metadata
-    database.SchemaField("_created_at", "TIMESTAMP", mode="REQUIRED"),
-]
-
-# Partitioning and clustering configuration
-QUERY_FANOUT_SESSIONS_PARTITION_FIELD = "session_date"
-QUERY_FANOUT_SESSIONS_CLUSTERING_FIELDS = ["bot_provider", "confidence_level"]
-
-
-# =============================================================================
-# SQLite Schema (for local development)
-# =============================================================================
-
-QUERY_FANOUT_SESSIONS_SQLITE_SCHEMA = """
-CREATE TABLE IF NOT EXISTS query_fanout_sessions (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    session_id TEXT NOT NULL UNIQUE,
-    session_date TEXT NOT NULL,
-    session_start_time TEXT NOT NULL,
-    session_end_time TEXT NOT NULL,
-    duration_ms INTEGER NOT NULL,
-    bot_provider TEXT NOT NULL,
-    bot_name TEXT,
-    request_count INTEGER NOT NULL,
-    unique_urls INTEGER NOT NULL,
-    mean_cosine_similarity REAL,
-    min_cosine_similarity REAL,
-    max_cosine_similarity REAL,
-    confidence_level TEXT NOT NULL,
-    fanout_session_name TEXT,
-    url_list TEXT NOT NULL,
-    window_ms REAL NOT NULL,
-    _created_at TEXT NOT NULL DEFAULT (datetime('now')),
-    CONSTRAINT valid_confidence CHECK (confidence_level IN ('high', 'medium', 'low'))
-)
-"""
+    "_created_at": "TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
+}
 
 # Index definitions for query fan-out sessions
 QUERY_FANOUT_SESSIONS_INDEXES = [
@@ -84,6 +50,36 @@ QUERY_FANOUT_SESSIONS_INDEXES = [
     "CREATE INDEX IF NOT EXISTS idx_sessions_confidence ON query_fanout_sessions(confidence_level)",
     "CREATE INDEX IF NOT EXISTS idx_sessions_request_count ON query_fanout_sessions(request_count)",
 ]
+
+
+@dataclass
+class QueryFanoutSession:
+    """Represents a query fan-out session."""
+
+    session_id: str
+    session_date: str
+    session_start_time: datetime
+    session_end_time: datetime
+    duration_ms: int
+    bot_provider: str
+    request_count: int
+    unique_urls: int
+    bot_name: Optional[str] = None
+    mean_cosine_similarity: Optional[float] = None
+    min_cosine_similarity: Optional[float] = None
+    max_cosine_similarity: Optional[float] = None
+    thematic_variance: Optional[float] = None
+    confidence_level: Optional[str] = None
+    fanout_session_name: Optional[str] = None
+    url_list: Optional[str] = None
+
+
+def get_create_sessions_table_sql() -> str:
+    """Get SQL to create the query_fanout_sessions table."""
+    columns = ", ".join(
+        f"{name} {dtype}" for name, dtype in QUERY_FANOUT_SESSIONS_COLUMNS.items()
+    )
+    return f"CREATE TABLE IF NOT EXISTS query_fanout_sessions ({columns})"
 
 
 # =============================================================================

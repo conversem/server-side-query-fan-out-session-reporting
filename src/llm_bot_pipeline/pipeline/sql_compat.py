@@ -254,4 +254,3 @@ class SQLBuilder:
     def row_number(self, partition_cols: list[str], order_col: str) -> str:
         """Generate ROW_NUMBER for deduplication."""
         return row_number_dedup(partition_cols, order_col, self.backend)
-

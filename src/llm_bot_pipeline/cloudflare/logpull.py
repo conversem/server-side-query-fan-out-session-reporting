@@ -290,7 +290,9 @@ def _fetch_logs_chunk(
     end_epoch = int(end_time.timestamp())
     now_epoch = int(datetime.now(timezone.utc).timestamp())
 
-    logger.debug(f"Fetching logs: {start_time} to {end_time} (epoch: {start_epoch}-{end_epoch})")
+    logger.debug(
+        f"Fetching logs: {start_time} to {end_time} (epoch: {start_epoch}-{end_epoch})"
+    )
 
     # Get API token for direct HTTP requests
     from ..config.settings import get_settings as _get_settings
@@ -306,7 +308,9 @@ def _fetch_logs_chunk(
             # Use direct HTTP request instead of SDK method
             # The SDK's logs.received.get() fails with 403 for Bot Management fields
             # but direct HTTP requests with Bearer token work correctly
-            api_url = f"https://api.cloudflare.com/client/v4/zones/{zone_id}/logs/received"
+            api_url = (
+                f"https://api.cloudflare.com/client/v4/zones/{zone_id}/logs/received"
+            )
             headers = {
                 "Authorization": f"Bearer {_api_token}",
                 "Content-Type": "application/json",
@@ -321,18 +325,20 @@ def _fetch_logs_chunk(
 
             # If 403 with full fields, try basic fields (without Bot Management)
             if response.status_code == 403 and current_fields != OUTPUT_FIELDS_BASIC:
-                logger.warning("Full fields failed (403), falling back to basic fields (no Bot Management)")
+                logger.warning(
+                    "Full fields failed (403), falling back to basic fields (no Bot Management)"
+                )
                 current_fields = OUTPUT_FIELDS_BASIC
                 continue  # Retry with basic fields
-            
+
             if response.status_code != 200:
                 raise Exception(f"HTTP {response.status_code}: {response.text[:500]}")
 
             # Process NDJSON response (one JSON object per line)
             record_count = 0
             filtered_count = 0
-            using_basic_fields = (current_fields == OUTPUT_FIELDS_BASIC)
-            for line in response.text.strip().split('\n'):
+            using_basic_fields = current_fields == OUTPUT_FIELDS_BASIC
+            for line in response.text.strip().split("\n"):
                 if not line:
                     continue
                 try:
@@ -362,7 +368,9 @@ def _fetch_logs_chunk(
                 yield record
 
             if filter_llm_bots and filtered_count > 0:
-                logger.debug(f"Fetched {record_count} LLM bot records for chunk (filtered {filtered_count} non-LLM requests)")
+                logger.debug(
+                    f"Fetched {record_count} LLM bot records for chunk (filtered {filtered_count} non-LLM requests)"
+                )
             else:
                 logger.debug(f"Fetched {record_count} records for chunk")
             return  # Success, exit retry loop
@@ -562,7 +570,9 @@ def ingest_to_sqlite(
 # =============================================================================
 
 
-def check_log_retention(zone_id: Optional[str] = None, settings: Optional[Settings] = None) -> dict:
+def check_log_retention(
+    zone_id: Optional[str] = None, settings: Optional[Settings] = None
+) -> dict:
     """
     Check if log retention is enabled for the zone.
 

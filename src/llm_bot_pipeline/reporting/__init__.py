@@ -1,7 +1,5 @@
-"""Reporting and analytics module."""
+"""Reporting and analytics module for SQLite-based pipeline."""
 
-from .aggregations import AggregationResult, ReportingAggregator
-from .dashboard_queries import DashboardQueries, QueryResult
 from .local_aggregations import LocalReportingAggregator
 from .local_dashboard_queries import LocalDashboardQueries
 from .session_aggregations import (
@@ -11,15 +9,9 @@ from .session_aggregations import (
 )
 
 __all__ = [
-    # Aggregations (SQLite)
-    "ReportingAggregator",
-    "AggregationResult",
-    # Dashboard Queries (SQLite)
-    "DashboardQueries",
-    "QueryResult",
-    # Local Aggregations
+    # Local Aggregations (SQLite)
     "LocalReportingAggregator",
-    # Local Dashboard Queries
+    # Local Dashboard Queries (SQLite)
     "LocalDashboardQueries",
     # Query Fan-Out Sessions
     "SessionAggregator",

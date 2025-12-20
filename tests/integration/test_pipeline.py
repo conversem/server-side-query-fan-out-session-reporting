@@ -194,4 +194,3 @@ class TestPipelineErrorHandling:
         assert result.success
         assert result.raw_rows == 0
         assert result.transformed_rows == 0
-

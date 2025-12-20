@@ -82,7 +82,7 @@ class TestClassifyBot:
         assert result.bot_provider == "Perplexity"
         assert result.bot_category == "user_request"
 
-    def test_bingbot_user_request(self):
+    def test_bingbot_search_engine(self):
         """bingbot should be classified as Microsoft user_request bot."""
         user_agent = (
             "Mozilla/5.0 (compatible; bingbot/2.0; +http://www.bing.com/bingbot.htm)"
@@ -92,7 +92,7 @@ class TestClassifyBot:
         assert result is not None
         assert result.bot_name == "bingbot"
         assert result.bot_provider == "Microsoft"
-        assert result.bot_category == "user_request"
+        assert result.bot_category == "search_engine"
 
     def test_applebot_extended_training(self):
         """Applebot-Extended should be classified as Apple training bot."""
@@ -235,7 +235,8 @@ class TestBotNameHelpers:
         assert "ChatGPT-User" in user_bots
         assert "Claude-User" in user_bots
         assert "PerplexityBot" in user_bots
-        assert "bingbot" in user_bots
+        # bingbot is search_engine, not user_request
+        assert "bingbot" not in user_bots
         # Training bots should not be in user_request
         assert "GPTBot" not in user_bots
         assert "ClaudeBot" not in user_bots
@@ -272,4 +273,3 @@ class TestBotClassificationDataclass:
             "bot_provider": "TestProvider",
             "bot_category": "training",
         }
-

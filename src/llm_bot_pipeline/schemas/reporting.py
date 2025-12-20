@@ -1,69 +1,76 @@
 """
 Reporting table schemas for aggregated LLM bot traffic data.
 
-These schemas define pre-aggregated tables optimized for dashboard queries.
+These schemas define the structure for summary and analytical tables.
 """
 
-from google.cloud import database
+# =============================================================================
+# Daily Summary Schema (SQLite)
+# =============================================================================
 
-# Daily Summary Table
-# Aggregates bot traffic by date and bot characteristics
-DAILY_SUMMARY_SCHEMA = [
-    # Dimensions
-    database.SchemaField("request_date", "DATE", mode="REQUIRED"),
-    database.SchemaField("bot_provider", "STRING", mode="REQUIRED"),
-    database.SchemaField("bot_name", "STRING", mode="REQUIRED"),
-    database.SchemaField("bot_category", "STRING", mode="REQUIRED"),  # training | user_request
-    # Metrics
-    database.SchemaField("total_requests", "INTEGER", mode="REQUIRED"),
-    database.SchemaField("unique_urls", "INTEGER", mode="REQUIRED"),
-    database.SchemaField("unique_hosts", "INTEGER", mode="REQUIRED"),
-    database.SchemaField("avg_bot_score", "FLOAT64", mode="NULLABLE"),
-    database.SchemaField("successful_requests", "INTEGER", mode="REQUIRED"),  # 2xx responses
-    database.SchemaField("error_requests", "INTEGER", mode="REQUIRED"),  # 4xx + 5xx responses
-    database.SchemaField("redirect_requests", "INTEGER", mode="REQUIRED"),  # 3xx responses
-    # Metadata
-    database.SchemaField("_aggregated_at", "TIMESTAMP", mode="REQUIRED"),
-]
-
-DAILY_SUMMARY_PARTITION_FIELD = "request_date"
-DAILY_SUMMARY_CLUSTERING_FIELDS = ["bot_provider", "bot_category"]
+DAILY_SUMMARY_COLUMNS = {
+    "summary_date": "DATE PRIMARY KEY",
+    "total_requests": "INTEGER",
+    "unique_bots": "INTEGER",
+    "unique_ips": "INTEGER",
+    "unique_urls": "INTEGER",
+    "avg_bot_score": "REAL",
+    "verified_bot_pct": "REAL",
+    "success_rate": "REAL",
+    "_created_at": "TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
+}
 
 
-# URL Performance Table
-# Aggregates bot traffic by URL for content analysis
-URL_PERFORMANCE_SCHEMA = [
-    # Dimensions
-    database.SchemaField("request_date", "DATE", mode="REQUIRED"),
-    database.SchemaField("request_host", "STRING", mode="REQUIRED"),
-    database.SchemaField("url_path", "STRING", mode="REQUIRED"),
-    # Bot metrics
-    database.SchemaField("total_bot_requests", "INTEGER", mode="REQUIRED"),
-    database.SchemaField("unique_bot_providers", "INTEGER", mode="REQUIRED"),
-    database.SchemaField("unique_bot_names", "INTEGER", mode="REQUIRED"),
-    # Category breakdown
-    database.SchemaField("training_hits", "INTEGER", mode="REQUIRED"),
-    database.SchemaField("user_request_hits", "INTEGER", mode="REQUIRED"),
-    # Response breakdown
-    database.SchemaField("successful_requests", "INTEGER", mode="REQUIRED"),
-    database.SchemaField("error_requests", "INTEGER", mode="REQUIRED"),
-    # Time tracking
-    database.SchemaField("first_seen", "TIMESTAMP", mode="REQUIRED"),
-    database.SchemaField("last_seen", "TIMESTAMP", mode="REQUIRED"),
-    # Metadata
-    database.SchemaField("_aggregated_at", "TIMESTAMP", mode="REQUIRED"),
-]
+# =============================================================================
+# URL Performance Schema (SQLite)
+# =============================================================================
 
-URL_PERFORMANCE_PARTITION_FIELD = "request_date"
-URL_PERFORMANCE_CLUSTERING_FIELDS = ["request_host", "url_path"]
+URL_PERFORMANCE_COLUMNS = {
+    "url_path": "TEXT PRIMARY KEY",
+    "request_count": "INTEGER",
+    "unique_bots": "INTEGER",
+    "avg_bot_score": "REAL",
+    "success_rate": "REAL",
+    "first_seen": "DATE",
+    "last_seen": "DATE",
+    "_created_at": "TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
+}
 
 
-# Data Freshness Table
-# Tracks when data was last processed for monitoring
-DATA_FRESHNESS_SCHEMA = [
-    database.SchemaField("table_name", "STRING", mode="REQUIRED"),
-    database.SchemaField("last_processed_date", "DATE", mode="REQUIRED"),
-    database.SchemaField("last_updated_at", "TIMESTAMP", mode="REQUIRED"),
-    database.SchemaField("rows_processed", "INTEGER", mode="REQUIRED"),
-]
+# =============================================================================
+# Bot Provider Summary Schema (SQLite)
+# =============================================================================
 
+BOT_PROVIDER_SUMMARY_COLUMNS = {
+    "summary_date": "DATE",
+    "bot_provider": "TEXT",
+    "request_count": "INTEGER",
+    "unique_urls": "INTEGER",
+    "avg_requests_per_session": "REAL",
+    "session_count": "INTEGER",
+    "_created_at": "TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
+}
+
+
+def get_create_daily_summary_sql() -> str:
+    """Get SQL to create the daily_summary table."""
+    columns = ", ".join(
+        f"{name} {dtype}" for name, dtype in DAILY_SUMMARY_COLUMNS.items()
+    )
+    return f"CREATE TABLE IF NOT EXISTS daily_summary ({columns})"
+
+
+def get_create_url_performance_sql() -> str:
+    """Get SQL to create the url_performance table."""
+    columns = ", ".join(
+        f"{name} {dtype}" for name, dtype in URL_PERFORMANCE_COLUMNS.items()
+    )
+    return f"CREATE TABLE IF NOT EXISTS url_performance ({columns})"
+
+
+def get_create_bot_provider_summary_sql() -> str:
+    """Get SQL to create the bot_provider_summary table."""
+    columns = ", ".join(
+        f"{name} {dtype}" for name, dtype in BOT_PROVIDER_SUMMARY_COLUMNS.items()
+    )
+    return f"CREATE TABLE IF NOT EXISTS bot_provider_summary ({columns})"

@@ -145,4 +145,3 @@ class TestIsErrorStatus:
     def test_none_not_error(self):
         """None is not error."""
         assert is_error_status(None) is False
-

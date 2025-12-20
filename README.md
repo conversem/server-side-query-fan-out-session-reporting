@@ -1,10 +1,19 @@
-# Server-Side Query Fan-Out Session Reporting
+# Server-Side Query Fan-Out Session monitoring & Reporting
 
-A research framework for analyzing LLM bot traffic patterns and identifying query fan-out sessions from server-side log data.
+A research framework for **server-side LLM activity tracking**, including our newly introduced **Query Fan-Out Session** tracking methodology.
 
-## What is Query Fan-Out?
+📄 **Read the research article:** [The Query Fan-Out Session: Server-side Query Fan-Out Tracking](https://conversem.com/the-query-fan-out-session/)
 
-When LLM-powered services (like ChatGPT, Perplexity, or Claude) process user queries, they often make multiple rapid requests to gather information. These "fan-out" patterns appear as bursts of requests within milliseconds of each other. This framework:
+## What is a Query Fan-Out Session?
+
+A **Query Fan-Out Session** is a bundle of web requests from an LLM chat assistant that originated from a single user question. When LLM-powered services (like ChatGPT, Perplexity, or Claude) process user queries, they fan out multiple rapid requests to gather information—often 4-5 requests within 10-20ms from a single user question. By detecting these bursts, we can group requests into meaningful sessions that represent actual user interactions.
+
+**Key research findings:**
+- Most common gap between requests: **9ms**
+- 84% of request gaps: **≤ 20ms**
+- Optimal bundling window: **100ms** (91%+ sessions maintain high thematic coherence)
+
+This framework allows you to reproduce the research and apply it to your own server logs:
 
 1. **Ingests** Cloudflare logs via the Logpull API
 2. **Identifies** request bundles using temporal and semantic analysis
@@ -29,7 +38,7 @@ When LLM-powered services (like ChatGPT, Perplexity, or Claude) process user que
 ### 1. Clone and Setup
 
 ```bash
-git clone https://github.com/your-org/server-side-query-fan-out-session-reporting.git
+git clone https://github.com/conversem/server-side-query-fan-out-session-reporting.git
 cd server-side-query-fan-out-session-reporting
 
 python -m venv venv
@@ -178,24 +187,43 @@ cloudflare:
 
 - [Architecture Overview](docs/architecture.md)
 - [SOPS Quick Start](docs/sops/quickstart.md)
-- [Research PRD](docs/prds/query-fanout-bundling-PRD.md)
+- [Research Article: The Query Fan-Out Session](https://conversem.com/the-query-fan-out-session/)
 
 ## Contributing
 
-Contributions are welcome! Please read the contributing guidelines before submitting PRs.
+Contributions are welcome! Please read the [contributing guidelines](CONTRIBUTING.md) before submitting PRs.
 
 ## License
 
-[MIT License](LICENSE)
+This project is licensed under the [GNU Affero General Public License v3.0](LICENSE) (AGPL-3.0).
+
+### What this means
+
+- ✅ **Free to use** for internal tools, consulting, and client services
+- ✅ **Free to modify** and adapt for your organization
+- ✅ **Free to distribute** with attribution
+- ⚠️ **SaaS/hosted services**: If you offer this as a hosted service, AGPL-3.0 requires you to release your source code under the same license.
+
+### Commercial Licensing
+
+For organizations that want to incorporate this into proprietary SaaS products without the AGPL-3.0 open-source requirements, commercial licenses are available. [Contact me](https://conversem.com/contact/).
 
 ## Citation
 
 If you use this framework in your research, please cite:
 
+> Remy, R. (2025). *Query Fan-Out Session Analysis: Determining Optimal Time Windows for LLM Bot Request Bundling*. Conversem Research Report.
+
 ```bibtex
-@software{query_fanout_sessions,
-  title = {Server-Side Query Fan-Out Session Reporting},
-  year = {2024},
-  url = {https://github.com/your-org/server-side-query-fan-out-session-reporting}
+@article{remy2025queryfanout,
+  author = {Remy, Ruben},
+  title = {The Query Fan-Out Session: Server-side Query Fan-Out Tracking},
+  year = {2025},
+  url = {https://conversem.com/the-query-fan-out-session/},
+  publisher = {Conversem}
 }
 ```
+
+## About
+
+This open-source release accompanies the research article on [The Query Fan-Out Session: Server-side Query Fan-Out Tracking](https://conversem.com/the-query-fan-out-session/). The methodology enables publishers to understand how their content contributes to answering real user questions in AI interfaces—moving beyond simple request counting to meaningful session-based metrics.

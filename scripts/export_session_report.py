@@ -32,7 +32,7 @@ import pandas as pd
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from llm_bot_pipeline.pipeline.orchestrator import setup_logging
+from llm_bot_pipeline.pipeline.local_pipeline import setup_logging
 from llm_bot_pipeline.storage import get_backend
 
 logger = logging.getLogger(__name__)

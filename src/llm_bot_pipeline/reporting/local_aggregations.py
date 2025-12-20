@@ -315,9 +315,7 @@ class LocalReportingAggregator:
     def _build_daily_summary_query(self, start_date: date, end_date: date) -> str:
         """Build aggregation query for daily_summary table."""
         # Use SQLBuilder for backend-specific SQL
-        countif_success = self._sql.countif(
-            "response_status_category = '2xx_success'"
-        )
+        countif_success = self._sql.countif("response_status_category = '2xx_success'")
         countif_error = self._sql.countif(
             "response_status_category IN ('4xx_client_error', '5xx_server_error')"
         )
@@ -354,9 +352,7 @@ class LocalReportingAggregator:
         """Build aggregation query for url_performance table."""
         countif_training = self._sql.countif("bot_category = 'training'")
         countif_user_request = self._sql.countif("bot_category = 'user_request'")
-        countif_success = self._sql.countif(
-            "response_status_category = '2xx_success'"
-        )
+        countif_success = self._sql.countif("response_status_category = '2xx_success'")
         countif_error = self._sql.countif(
             "response_status_category IN ('4xx_client_error', '5xx_server_error')"
         )
@@ -423,9 +419,7 @@ class LocalReportingAggregator:
         ]
         return self._batch_insert("url_performance", columns, results)
 
-    def _batch_insert(
-        self, table: str, columns: list[str], results: list[dict]
-    ) -> int:
+    def _batch_insert(self, table: str, columns: list[str], results: list[dict]) -> int:
         """
         Batch insert rows for better performance.
 
@@ -470,9 +464,7 @@ class LocalReportingAggregator:
                     logger.warning(f"Failed to insert {table} row: {row_e}")
             return rows_inserted
 
-    def _build_single_insert(
-        self, table: str, columns: list[str], row: dict
-    ) -> str:
+    def _build_single_insert(self, table: str, columns: list[str], row: dict) -> str:
         """Build single INSERT statement (fallback for batch failure)."""
         values = []
         for col in columns:
@@ -533,4 +525,3 @@ class LocalReportingAggregator:
                 stats[table_name] = {"error": str(e)}
 
         return stats
-

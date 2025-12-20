@@ -1,4 +1,4 @@
-# Cloudflare Logpush Pipeline - Development Environment
+# LLM Bot Traffic Analysis Pipeline - Development Environment
 # Includes Google Cloud CLI and Python for BigQuery operations
 
 FROM python:3.11-slim

@@ -4,6 +4,6 @@ from .retry_handler import RetryConfig, RetryHandler, with_retry
 
 __all__ = [
     "RetryHandler",
-    "RetryConfig", 
+    "RetryConfig",
     "with_retry",
 ]

@@ -298,6 +298,7 @@ class TestComputeBundleStatistics:
                 start_time=datetime.now(),
                 end_time=datetime.now(),
                 request_count=1,
+                urls=["/page1"],
                 bot_provider="OpenAI",
             ),
             Bundle(
@@ -305,6 +306,7 @@ class TestComputeBundleStatistics:
                 start_time=datetime.now(),
                 end_time=datetime.now(),
                 request_count=3,
+                urls=["/page1", "/page2", "/page3"],
                 bot_provider="OpenAI",
             ),
         ]
@@ -322,14 +324,16 @@ class TestComputeBundleStatistics:
                 bundle_id="1",
                 start_time=datetime.now(),
                 end_time=datetime.now(),
-                request_count=15,  # Giant
+                request_count=15,
+                urls=["/p" + str(i) for i in range(15)],  # 15 unique URLs = giant
                 bot_provider="OpenAI",
             ),
             Bundle(
                 bundle_id="2",
                 start_time=datetime.now(),
                 end_time=datetime.now(),
-                request_count=5,  # Normal
+                request_count=5,
+                urls=["/page1", "/page2"],  # 2 unique URLs = normal
                 bot_provider="OpenAI",
             ),
         ]

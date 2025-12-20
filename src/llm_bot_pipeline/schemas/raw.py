@@ -4,21 +4,31 @@ Raw table schema for Cloudflare log data.
 This schema matches the fields selected in the log ingestion configuration.
 """
 
-from google.cloud import database
+# =============================================================================
+# Raw Bot Requests Schema (SQLite)
+# =============================================================================
 
-RAW_SCHEMA = [
-    database.SchemaField("EdgeStartTimestamp", "TIMESTAMP", mode="REQUIRED"),
-    database.SchemaField("ClientRequestURI", "STRING", mode="NULLABLE"),
-    database.SchemaField("ClientRequestHost", "STRING", mode="NULLABLE"),
-    database.SchemaField("ClientRequestUserAgent", "STRING", mode="NULLABLE"),
-    database.SchemaField("BotScore", "INTEGER", mode="NULLABLE"),
-    database.SchemaField("BotScoreSrc", "STRING", mode="NULLABLE"),
-    database.SchemaField("VerifiedBot", "BOOLEAN", mode="NULLABLE"),
-    database.SchemaField("BotTags", "STRING", mode="REPEATED"),
-    database.SchemaField("ClientIP", "STRING", mode="NULLABLE"),
-    database.SchemaField("ClientCountry", "STRING", mode="NULLABLE"),
-    database.SchemaField("EdgeResponseStatus", "INTEGER", mode="NULLABLE"),
-    # Ingestion metadata - added by Database streaming insert
-    database.SchemaField("_ingestion_time", "TIMESTAMP", mode="NULLABLE"),
-]
+RAW_BOT_REQUESTS_COLUMNS = {
+    "EdgeStartTimestamp": "TIMESTAMP",
+    "ClientRequestURI": "TEXT",
+    "ClientRequestHost": "TEXT",
+    "ClientRequestUserAgent": "TEXT",
+    "BotScore": "INTEGER",
+    "BotScoreSrc": "TEXT",
+    "VerifiedBot": "INTEGER",  # Boolean as 0/1
+    "BotTags": "TEXT",  # JSON array
+    "ClientIP": "TEXT",
+    "ClientCountry": "TEXT",
+    "EdgeResponseStatus": "INTEGER",
+    "RayID": "TEXT",
+    # Metadata
+    "_ingested_at": "TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
+}
 
+
+def get_create_raw_table_sql() -> str:
+    """Get SQL to create the raw_bot_requests table."""
+    columns = ", ".join(
+        f"{name} {dtype}" for name, dtype in RAW_BOT_REQUESTS_COLUMNS.items()
+    )
+    return f"CREATE TABLE IF NOT EXISTS raw_bot_requests ({columns})"

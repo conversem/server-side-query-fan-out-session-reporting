@@ -352,4 +352,3 @@ class TestPerformanceBaseline:
         assert duration < 10.0
 
         pipeline.close()
-
