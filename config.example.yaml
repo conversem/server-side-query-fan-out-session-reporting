@@ -1,0 +1,20 @@
+# Configuration Template for Query Fan-Out Session Reporting
+#
+# Setup:
+# 1. Copy this to config.enc.yaml and encrypt with SOPS:
+#    sops -e config.example.yaml > config.enc.yaml
+#
+# 2. To edit encrypted file:
+#    sops config.enc.yaml
+#
+# See docs/sops/quickstart.md for detailed instructions.
+
+# Storage Configuration (SQLite)
+storage:
+  backend: "sqlite"
+  sqlite_db_path: "data/llm-bot-logs.db"
+
+# Cloudflare Configuration (for Logpull API)
+cloudflare:
+  api_token: "your-cloudflare-api-token"  # SENSITIVE - Get from Cloudflare dashboard
+  zone_id: "your-zone-id"                  # SENSITIVE - Your Cloudflare zone ID

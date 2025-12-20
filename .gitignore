@@ -1,0 +1,86 @@
+# SOPS - User's encrypted config (they create their own)
+.sops.yaml
+config.enc.yaml
+
+# Keep templates
+!.sops.yaml.example
+!config.example.yaml
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+venv/
+ENV/
+env/
+.venv/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment variables
+.env
+.env.local
+*.env
+
+# Logs
+*.log
+logs/
+
+# Docker
+.docker/
+
+# Credentials directory (keep structure, ignore contents)
+credentials/*
+!credentials/.gitkeep
+
+# SQLite databases
+data/*.db
+data/*.sqlite
+data/*.sqlite3
+!data/.gitkeep
+
+# Data files (user generates their own)
+data/*.csv
+data/*.xlsx
+data/experiments/
+data/temporal_analysis/
+data/visualizations/
+data/reports/

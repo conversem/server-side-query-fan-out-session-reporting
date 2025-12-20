@@ -1,0 +1,12 @@
+# SOPS Configuration
+# 
+# Setup instructions:
+# 1. Generate your Age key: age-keygen -o ~/.sops/age/keys.txt
+# 2. Copy this file: cp .sops.yaml.example .sops.yaml
+# 3. Replace the placeholder below with your public key from step 1
+#
+# See docs/sops/quickstart.md for detailed instructions.
+
+creation_rules:
+  - path_regex: \.enc\.yaml$
+    age: age1YOUR_PUBLIC_KEY_HERE
