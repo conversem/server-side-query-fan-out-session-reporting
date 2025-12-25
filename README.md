@@ -15,7 +15,7 @@ A **Query Fan-Out Session** is a bundle of web requests from an LLM chat assista
 
 This framework allows you to reproduce the research and apply it to your own server logs:
 
-1. **Ingests** Cloudflare logs via the Logpull API
+1. **Ingests** Export files from 8 platforms or Cloudflare logs via the Logpull API
 2. **Identifies** request bundles using temporal and semantic analysis
 3. **Optimizes** the time window for accurate session detection
 4. **Reports** bundled sessions in CSV/Excel format
