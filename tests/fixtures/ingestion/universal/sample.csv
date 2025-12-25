@@ -1,0 +1,8 @@
+timestamp,client_ip,method,host,path,status_code,user_agent,query_string,response_bytes,request_bytes,response_time_ms,cache_status,edge_location,referer,protocol,ssl_protocol
+2024-01-15T12:30:45+00:00,192.0.2.100,GET,example.com,/api/data,200,Mozilla/5.0 (compatible; GPTBot/1.0),?key=value,1024,256,150,HIT,LAX,https://example.com/referer,HTTP/1.1,TLSv1.3
+2024-01-15T12:30:46+00:00,192.0.2.101,POST,example.com,/api/submit,201,Mozilla/5.0 (compatible; ChatGPT-User/1.0),,2048,512,200,MISS,DFW,,HTTP/2,TLSv1.3
+2024-01-15T12:30:47+00:00,192.0.2.102,GET,example.com,/docs,200,Mozilla/5.0 (compatible; ClaudeBot/1.0),,4096,128,100,HIT,SFO,https://example.com,HTTP/1.1,TLSv1.2
+2024-01-15T12:30:48+00:00,192.0.2.103,GET,example.com,/api/search,200,Mozilla/5.0 (compatible; PerplexityBot/1.0),?q=test,8192,64,250,MISS,ORD,,HTTP/2,TLSv1.3
+2024-01-15T12:30:49+00:00,192.0.2.104,GET,example.com,/products,404,Mozilla/5.0 (compatible; GPTBot/1.0),,0,128,50,MISS,IAD,,HTTP/1.1,TLSv1.3
+
+

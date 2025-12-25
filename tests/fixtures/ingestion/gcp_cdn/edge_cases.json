@@ -1,0 +1,70 @@
+[
+  {
+    "timestamp": "2024-01-15T12:30:45.123456Z",
+    "severity": "INFO",
+    "httpRequest": {
+      "remoteIp": "192.0.2.100",
+      "requestMethod": "GET",
+      "requestUrl": "https://example.com/api/data",
+      "status": 200,
+      "userAgent": "Mozilla/5.0 (compatible; GPTBot/1.0)"
+    }
+  },
+  {
+    "timestamp": "2024-01-15T12:30:46.000000Z",
+    "severity": "WARNING",
+    "httpRequest": {
+      "remoteIp": "192.0.2.101",
+      "requestMethod": "GET",
+      "status": 404,
+      "requestUrl": "/relative/path?foo=bar"
+    }
+  },
+  {
+    "timestamp": "2024-01-15T12:30:47.000000+00:00",
+    "severity": "INFO",
+    "httpRequest": {
+      "remoteIp": "2001:db8::1",
+      "requestMethod": "GET",
+      "requestUrl": "https://example.com/ipv6-test",
+      "status": 200,
+      "userAgent": "Bytespider/1.0",
+      "requestSize": 100,
+      "responseSize": 500,
+      "latency": "1.500s",
+      "cacheHit": false,
+      "cacheLookup": false
+    }
+  },
+  {
+    "timestamp": "2024-01-15T12:30:48.000000Z",
+    "severity": "ERROR",
+    "httpRequest": {
+      "status": 500
+    }
+  },
+  {
+    "timestamp": "2024-01-15T12:30:49.000000Z",
+    "severity": "INFO"
+  },
+  {
+    "timestamp": "2024-01-15T12:30:50.000000-05:00",
+    "severity": "INFO",
+    "resource": {
+      "type": "http_load_balancer",
+      "labels": {
+        "project_id": "my-project",
+        "backend_service_name": "my-backend",
+        "zone": "us-central1"
+      }
+    },
+    "httpRequest": {
+      "remoteIp": "192.0.2.103",
+      "requestMethod": "GET",
+      "requestUrl": "https://example.com/with-resource-labels",
+      "status": 200,
+      "userAgent": "PerplexityBot/1.0"
+    }
+  }
+]
+

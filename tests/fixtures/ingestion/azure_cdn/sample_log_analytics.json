@@ -1,0 +1,42 @@
+[
+  {
+    "TimeGenerated": "2024-01-15T12:30:45Z",
+    "clientIp_s": "192.0.2.100",
+    "requestMethod_s": "GET",
+    "hostName_s": "example.com",
+    "requestUri_s": "https://example.com/api/data?key=value",
+    "httpStatusCode_d": 200,
+    "userAgent_s": "Mozilla/5.0 (compatible; GPTBot/1.0)",
+    "timeTaken_d": 0.150,
+    "responseBytes_d": 1024,
+    "cacheStatus_s": "HIT",
+    "pop_s": "LAX"
+  },
+  {
+    "TimeGenerated": "2024-01-15T12:30:46Z",
+    "clientIp_s": "192.0.2.101",
+    "requestMethod_s": "POST",
+    "hostName_s": "example.com",
+    "requestUri_s": "https://example.com/api/submit",
+    "httpStatusCode_d": 201,
+    "userAgent_s": "Mozilla/5.0 (compatible; ChatGPT-User/1.0)",
+    "timeTaken_d": 0.200,
+    "responseBytes_d": 2048,
+    "cacheStatus_s": "MISS",
+    "pop_s": "DFW"
+  },
+  {
+    "TimeGenerated": "2024-01-15T12:30:47Z",
+    "clientIp_s": "192.0.2.102",
+    "requestMethod_s": "GET",
+    "hostName_s": "example.com",
+    "requestUri_s": "https://example.com/docs",
+    "httpStatusCode_d": 200,
+    "userAgent_s": "Mozilla/5.0 (compatible; ClaudeBot/1.0)",
+    "timeTaken_d": 0.100,
+    "responseBytes_d": 4096,
+    "cacheStatus_s": "HIT",
+    "pop_s": "SFO"
+  }
+]
+

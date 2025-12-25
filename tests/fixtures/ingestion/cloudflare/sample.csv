@@ -1,0 +1,6 @@
+EdgeStartTimestamp,ClientIP,ClientRequestMethod,ClientRequestHost,ClientRequestURI,EdgeResponseStatus,ClientRequestUserAgent,EdgeResponseBytes,ClientRequestBytes,OriginResponseTime,CacheCacheStatus,EdgeColoCode,ClientRequestReferer,ClientRequestProtocol,ClientSSLProtocol
+1705324245000000000,192.0.2.100,GET,example.com,/api/data?key=value,200,Mozilla/5.0 (compatible; GPTBot/1.0),1024,256,0.15,HIT,LAX,https://example.com/referer,HTTP/1.1,TLSv1.3
+1705324246000000000,192.0.2.101,POST,example.com,/api/submit,201,Mozilla/5.0 (compatible; ChatGPT-User/1.0),2048,512,0.20,MISS,DFW,,HTTP/2,TLSv1.3
+1705324247000000000,192.0.2.102,GET,example.com,/docs,200,Mozilla/5.0 (compatible; ClaudeBot/1.0),4096,128,0.10,HIT,SFO,https://example.com,HTTP/1.1,TLSv1.2
+
+

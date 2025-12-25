@@ -36,7 +36,8 @@ CREATE TABLE IF NOT EXISTS raw_bot_requests (
     ClientIP TEXT,
     ClientCountry TEXT,
     EdgeResponseStatus INTEGER,
-    _ingestion_time TEXT NOT NULL
+    _ingestion_time TEXT NOT NULL,
+    source_provider TEXT  -- Tracks data provenance (universal, cloudflare, aws_cloudfront)
 )
 """
 
@@ -276,6 +277,7 @@ VALID_TABLES = frozenset(
         "daily_summary",
         "url_performance",
         "data_freshness",
+        "query_fanout_sessions",
     ]
 )
 
@@ -443,12 +445,12 @@ class SQLiteBackend(StorageBackend):
                 EdgeStartTimestamp, ClientRequestURI, ClientRequestHost,
                 ClientRequestUserAgent, BotScore, BotScoreSrc, VerifiedBot,
                 BotTags, ClientIP, ClientCountry, EdgeResponseStatus,
-                _ingestion_time
+                _ingestion_time, source_provider
             ) VALUES (
                 :EdgeStartTimestamp, :ClientRequestURI, :ClientRequestHost,
                 :ClientRequestUserAgent, :BotScore, :BotScoreSrc, :VerifiedBot,
                 :BotTags, :ClientIP, :ClientCountry, :EdgeResponseStatus,
-                :_ingestion_time
+                :_ingestion_time, :source_provider
             )
         """
 
@@ -472,6 +474,7 @@ class SQLiteBackend(StorageBackend):
                 "ClientCountry": record.get("ClientCountry"),
                 "EdgeResponseStatus": record.get("EdgeResponseStatus"),
                 "_ingestion_time": record.get("_ingestion_time", now),
+                "source_provider": record.get("source_provider"),
             }
             converted_records.append(converted)
 

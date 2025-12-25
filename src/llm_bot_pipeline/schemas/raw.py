@@ -23,6 +23,8 @@ RAW_BOT_REQUESTS_COLUMNS = {
     "RayID": "TEXT",
     # Metadata
     "_ingested_at": "TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
+    # Data provenance
+    "source_provider": "TEXT",  # Provider that ingested this record
 }
 
 

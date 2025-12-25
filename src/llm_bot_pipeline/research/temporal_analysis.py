@@ -6,13 +6,17 @@ natural clustering boundaries in LLM bot request patterns.
 """
 
 import logging
+import sqlite3
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
+from pathlib import Path
 from typing import Optional
 
 import numpy as np
 import pandas as pd
+
+from ..storage.sqlite_backend import VALID_TABLES
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +54,7 @@ class Bundle:
 
 def compute_inter_request_deltas(
     df: pd.DataFrame,
-    timestamp_col: str = "datetime",
+    timestamp_col: str = "request_timestamp",
     group_by: Optional[str] = "bot_provider",
 ) -> pd.DataFrame:
     """
@@ -58,7 +62,7 @@ def compute_inter_request_deltas(
 
     Args:
         df: DataFrame with request data
-        timestamp_col: Name of timestamp column
+        timestamp_col: Name of timestamp column (default: request_timestamp)
         group_by: Column to group by (e.g., 'bot_provider'), or None for global
 
     Returns:
@@ -204,8 +208,8 @@ def find_natural_gaps(
 def create_temporal_bundles(
     df: pd.DataFrame,
     window_ms: float,
-    timestamp_col: str = "datetime",
-    url_col: str = "url",
+    timestamp_col: str = "request_timestamp",
+    url_col: str = "request_uri",
     group_by: Optional[str] = "bot_provider",
 ) -> list[Bundle]:
     """
@@ -214,8 +218,8 @@ def create_temporal_bundles(
     Args:
         df: DataFrame with request data
         window_ms: Maximum time window in milliseconds
-        timestamp_col: Name of timestamp column
-        url_col: Name of URL column
+        timestamp_col: Name of timestamp column (default: request_timestamp)
+        url_col: Name of URL column (default: request_uri)
         group_by: Column to group by (e.g., 'bot_provider'), or None for global
 
     Returns:
@@ -384,16 +388,16 @@ class TemporalAnalyzer:
 
     def __init__(
         self,
-        timestamp_col: str = "datetime",
-        url_col: str = "url",
+        timestamp_col: str = "request_timestamp",
+        url_col: str = "request_uri",
         group_by: str = "bot_provider",
     ):
         """
         Initialize temporal analyzer.
 
         Args:
-            timestamp_col: Name of timestamp column
-            url_col: Name of URL column
+            timestamp_col: Name of timestamp column (default: request_timestamp)
+            url_col: Name of URL column (default: request_uri)
             group_by: Column to group by for per-provider analysis
         """
         self.timestamp_col = timestamp_col
@@ -441,6 +445,43 @@ class TemporalAnalyzer:
             self for method chaining
         """
         df = pd.read_csv(path)
+        return self.load_data(df)
+
+    def load_from_sqlite(
+        self,
+        db_path: str,
+        table_name: str = "bot_requests_daily",
+    ) -> "TemporalAnalyzer":
+        """
+        Load request data from SQLite database.
+
+        Args:
+            db_path: Path to SQLite database file
+            table_name: Table to read from (default: bot_requests_daily)
+
+        Returns:
+            self for method chaining
+
+        Raises:
+            FileNotFoundError: If database file doesn't exist
+            ValueError: If table name is not in allowed list
+        """
+        path = Path(db_path)
+        if not path.exists():
+            raise FileNotFoundError(f"Database not found: {db_path}")
+
+        # Validate table name to prevent SQL injection
+        if table_name not in VALID_TABLES:
+            raise ValueError(
+                f"Invalid table name: '{table_name}'. "
+                f"Must be one of: {sorted(VALID_TABLES)}"
+            )
+
+        query = f"SELECT * FROM {table_name}"
+        with sqlite3.connect(str(path)) as conn:
+            df = pd.read_sql_query(query, conn)
+
+        logger.info(f"Loaded {len(df):,} records from {table_name}")
         return self.load_data(df)
 
     def get_delta_stats(self, by_provider: bool = True) -> dict[str, DeltaStats]:

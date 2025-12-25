@@ -1,0 +1,5 @@
+Time,ClientIp,HttpMethod,HostName,RequestUri,HttpStatusCode,UserAgent,ResponseBytes,RequestBytes,TimeTaken,CacheStatus,Pop,Referrer,RequestProtocol,SecurityProtocol
+2024-01-15T12:30:45Z,192.0.2.100,GET,example.com,https://example.com/api/data?key=value,200,Mozilla/5.0 (compatible; GPTBot/1.0),1024,256,0.150,HIT,LAX,https://example.com/referer,HTTPS,TLSv1.3
+2024-01-15T12:30:46Z,192.0.2.101,POST,example.com,https://example.com/api/submit,201,Mozilla/5.0 (compatible; ChatGPT-User/1.0),2048,512,0.200,MISS,DFW,,HTTPS,TLSv1.3
+2024-01-15T12:30:47Z,192.0.2.102,GET,example.com,https://example.com/docs,200,Mozilla/5.0 (compatible; ClaudeBot/1.0),4096,128,0.100,HIT,SFO,https://example.com,HTTPS,TLSv1.2
+

@@ -2,7 +2,7 @@
 
 ## Overview
 
-This project provides a framework for analyzing LLM bot traffic patterns and bundling requests into semantic query fan-out sessions. It uses Cloudflare's Logpull API to ingest data into a local SQLite database, then applies research-backed algorithms to identify session patterns.
+This project provides a framework for analyzing LLM bot traffic patterns and bundling requests into semantic query fan-out sessions. It supports ingestion from multiple CDN/cloud providers (AWS CloudFront, AWS ALB, Azure CDN, GCP CDN, Cloudflare, Fastly, Akamai) into a local SQLite database, then applies research-backed algorithms to identify session patterns.
 
 ## Folder Structure
 
@@ -12,13 +12,33 @@ server-side-query-fan-out-session-reporting/
 │   └── llm_bot_pipeline/             # Python package
 │       │
 │       ├── config/                   # Configuration management
-│       │   ├── settings.py           # Environment & project settings
+│       │   ├── settings.py           # Settings + SessionRefinementSettings
 │       │   ├── constants.py          # Bot classifications, field names
 │       │   └── sops_loader.py        # SOPS encrypted config loader
 │       │
 │       ├── cloudflare/               # Cloudflare Logpull integration
 │       │   ├── logpull.py            # Logpull API client
 │       │   └── filters.py            # LLM bot filter definitions
+│       │
+│       ├── ingestion/                # Multi-provider log ingestion
+│       │   ├── base.py               # IngestionAdapter base class
+│       │   ├── registry.py           # Provider registry
+│       │   ├── file_utils.py         # Gzip auto-detection
+│       │   ├── security.py           # Path traversal protection
+│       │   ├── validation.py         # Schema validation
+│       │   ├── parsers/              # Format-specific parsers
+│       │   │   ├── csv_parser.py
+│       │   │   ├── json_parser.py
+│       │   │   └── w3c_parser.py
+│       │   └── providers/            # Provider adapters
+│       │       ├── universal/        # CSV/JSON/NDJSON
+│       │       ├── aws_cloudfront/   # AWS CloudFront (W3C)
+│       │       ├── aws_alb/          # AWS ALB
+│       │       ├── azure_cdn/        # Azure CDN/Front Door
+│       │       ├── gcp_cdn/          # Google Cloud CDN
+│       │       ├── cloudflare/       # Cloudflare
+│       │       ├── fastly/           # Fastly
+│       │       └── akamai/           # Akamai DataStream
 │       │
 │       ├── storage/                  # SQLite storage layer
 │       │   ├── base.py               # StorageBackend abstract class
@@ -47,75 +67,95 @@ server-side-query-fan-out-session-reporting/
 │       │   ├── clean.py              # Clean/processed schema
 │       │   └── bundles.py            # Session bundle schema
 │       │
+│       ├── monitoring/               # Operational utilities
+│       │   └── retry_handler.py      # Retry logic with backoff
+│       │
 │       └── utils/                    # Shared utilities
 │           ├── bot_classifier.py     # User-agent classification
 │           ├── url_utils.py          # URL parsing utilities
 │           └── http_utils.py         # HTTP status helpers
 │
 ├── scripts/                          # CLI entry points
-│   ├── ingest_logs.py                # Cloudflare Logpull ingestion
+│   ├── ingest_logs.py                # Multi-provider log ingestion
 │   ├── run_pipeline.py               # ETL pipeline execution
 │   ├── run_window_experiment.py      # Research: optimal window
+│   ├── run_aggregations.py           # Run aggregation queries
+│   ├── run_dashboard_queries.py      # Dashboard query execution
+│   ├── run_quality_checks.py         # Data quality validation
 │   ├── export_session_report.py      # Export to CSV/Excel
 │   ├── analyze_temporal_patterns.py  # Temporal pattern analysis
 │   ├── plot_window_comparison.py     # Visualization generation
 │   ├── backfill_sessions.py          # Session backfill
-│   └── generate_sample_data.py       # Generate test data
+│   ├── generate_sample_data.py       # Generate test data
+│   └── migrations/                   # Database migrations
 │
 ├── tests/                            # Test suite
 │   ├── unit/                         # Unit tests
-│   └── integration/                  # Integration tests
+│   ├── integration/                  # Integration tests
+│   └── performance/                  # Performance benchmarks
 │
 ├── docs/                             # Documentation
-│   ├── sops/                         # SOPS encryption guide
-│   │   ├── quickstart.md
-│   │   ├── key-management.md
-│   │   ├── daily-usage.md
+│   ├── ingestion/                    # Multi-provider ingestion docs
+│   │   ├── cli-usage.md
+│   │   ├── providers/                # Provider-specific guides
 │   │   └── troubleshooting.md
-│   ├── prds/
-│   │   └── query-fanout-bundling-PRD.md
+│   ├── sops/                         # SOPS encryption guide
+│   ├── testing/                      # Test documentation
 │   └── architecture.md               # This file
 │
-├── data/                             # Local data storage
-│   └── .gitkeep                      # SQLite databases gitignored
-│
+├── data/                             # Local data storage (gitignored)
 ├── credentials/                      # Credentials (gitignored)
-│   └── .gitkeep
 │
 ├── Dockerfile
 ├── docker-compose.yml
-├── .sops.yaml.example                # SOPS template
 ├── config.example.yaml               # Configuration template
 ├── requirements.txt
 ├── pyproject.toml
+├── CONTRIBUTING.md
+├── LICENSE
 └── README.md
 ```
 
 ## Data Flow
 
 ```
-┌─────────────────┐     ┌───────────────────┐     ┌─────────────────────┐
-│   Cloudflare    │────►│   SQLite Database │────►│   Session Reports   │
-│    Logpull      │     │   raw_bot_requests│     │   CSV / Excel       │
-└─────────────────┘     └───────────────────┘     └─────────────────────┘
-        │                        │                         │
-        │                        │                         │
-   cloudflare/              pipeline/                 reporting/
-   logpull.py               local_pipeline.py         session_aggregations.py
-   filters.py               transform.py              export_session_report.py
-                                 │
-                                 ▼
-                           ┌───────────────────┐
-                           │     Research      │
-                           │  Window Optimizer │
-                           │  OptScore Calc    │
-                           └───────────────────┘
-                                 │
-                                 ▼
-                           research/
-                           experiment_runner.py
-                           window_optimizer.py
-                           temporal_analysis.py
+┌─────────────────────────────────────────────────────────────────────┐
+│                     Multi-Provider Log Sources                       │
+├───────────┬───────────┬───────────┬───────────┬───────────┬─────────┤
+│ Cloudflare│ AWS ALB   │ CloudFront│ Azure CDN │ Fastly    │ Akamai  │
+└─────┬─────┴─────┬─────┴─────┬─────┴─────┬─────┴─────┬─────┴────┬────┘
+      │           │           │           │           │          │
+      └───────────┴───────────┴─────┬─────┴───────────┴──────────┘
+                                    │
+                                    ▼
+                         ┌──────────────────────┐
+                         │  Ingestion Adapters  │
+                         │  (ingestion/)        │
+                         │  - Auto-detection    │
+                         │  - Gzip support      │
+                         │  - Schema validation │
+                         └──────────┬───────────┘
+                                    │
+                                    ▼
+                         ┌──────────────────────┐
+                         │   SQLite Database    │
+                         │   raw_bot_requests   │
+                         └──────────┬───────────┘
+                                    │
+              ┌─────────────────────┼─────────────────────┐
+              │                     │                     │
+              ▼                     ▼                     ▼
+     ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐
+     │    Pipeline     │  │    Research     │  │    Reporting    │
+     │  (pipeline/)    │  │  (research/)    │  │  (reporting/)   │
+     │  ETL Transform  │  │  Experiment     │  │  Session Export │
+     └────────┬────────┘  │  Runner         │  │  CSV / Excel    │
+              │           └────────┬────────┘  └─────────────────┘
+              ▼                    │
+     ┌─────────────────┐           │
+     │ bot_requests_   │◄──────────┘
+     │ daily           │  (reads from SQLite)
+     └─────────────────┘
 ```
 
 ## Research Methodology
@@ -127,6 +167,7 @@ The core research component determines optimal time windows for bundling LLM bot
 1. **Query Fan-Out Session**: A bundle of related requests from the same bot provider within a time window
 2. **Time Window**: The maximum gap (in milliseconds) between requests in the same session
 3. **OptScore**: A composite metric balancing multiple optimization objectives
+4. **Session Refinement**: Post-bundling collision detection and semantic splitting for improved purity
 
 ### OptScore Formula
 
@@ -142,19 +183,78 @@ Where:
 - **GiantRate** (ε=0.05): Penalty for oversized bundles
 - **ThematicVariance** (ζ=0.05): Penalty for thematic inconsistency
 
+### Session Refinement (Collision Detection)
+
+After initial temporal bundling, **session refinement** detects and splits collision bundles—cases where multiple independent queries were accidentally merged due to temporal proximity.
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                       Session Refinement Flow                        │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│  1. Initial Temporal Bundling                                        │
+│     └─► Group requests by (provider, time_window)                   │
+│                                                                      │
+│  2. Collision Detection (if enabled)                                 │
+│     └─► Flag bundles with low MIBCS (semantic incoherence)          │
+│     └─► IP-based detection OFF by default (research: r=0.023)       │
+│                                                                      │
+│  3. Semantic Splitting                                               │
+│     └─► Build URL similarity graph                                  │
+│     └─► Find connected components (sub-bundles)                     │
+│     └─► Accept split if MIBCS improves by threshold                 │
+│                                                                      │
+│  4. Output: Refined Sessions                                         │
+│     └─► Higher purity bundles                                       │
+│     └─► Better semantic coherence                                   │
+│                                                                      │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+**Configuration** (`config.example.yaml`):
+
+```yaml
+session_refinement:
+  enabled: true                      # Master flag (ON by default)
+  enable_semantic_refinement: true   # MIBCS-based splitting (recommended)
+  enable_ip_based_refinement: false  # Research shows IP doesn't help (r=0.023)
+  similarity_threshold: 0.5          # Min URL similarity to create edge
+  min_sub_bundle_size: 2             # Min requests per sub-bundle
+  min_mibcs_improvement: 0.05        # Min improvement to accept split
+```
+
+**Research Finding**: IP diversity does not discriminate between clean bundles and collisions (correlation r=0.023). See [IP Fingerprint Analysis](https://conversem.com/ip-addresses-dont-help-detect-query-fan-out-sessions/) for details.
+
 ### Experiment Pipeline
+
+The experiment runner reads directly from SQLite database:
+
+```bash
+# Run with default database
+python scripts/run_window_experiment.py
+
+# Custom database path
+python scripts/run_window_experiment.py --db-path data/my-logs.db
+
+# Custom options
+python scripts/run_window_experiment.py \
+    --db-path data/llm-bot-logs.db \
+    --table-name bot_requests_daily \
+    --windows 100,500,1000,3000,5000 \
+    --embedding-method tfidf
+```
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
 │                    Window Optimization Experiment                    │
 ├─────────────────────────────────────────────────────────────────────┤
 │                                                                      │
-│  1. Load Data                                                        │
+│  1. Load Data from SQLite (bot_requests_daily table)                 │
 │     └─► Filter by bot category (user_request)                       │
 │     └─► Exclude noise providers (Microsoft/Bing)                    │
 │                                                                      │
 │  2. Generate Candidate Windows                                       │
-│     └─► [50ms, 100ms, 500ms, 1000ms, 3000ms, 5000ms]                │
+│     └─► [100ms, 500ms, 1000ms, 3000ms, 5000ms]                      │
 │                                                                      │
 │  3. For Each Window:                                                 │
 │     └─► Bundle requests by (provider, time_window)                  │
@@ -218,6 +318,9 @@ See [docs/sops/quickstart.md](sops/quickstart.md) for setup instructions.
 | `SQLITE_DB_PATH` | SQLite database path (default: `data/llm-bot-logs.db`) |
 | `CLOUDFLARE_API_TOKEN` | Cloudflare API token |
 | `CLOUDFLARE_ZONE_ID` | Cloudflare zone ID |
+| `SESSION_REFINEMENT_ENABLED` | Enable session refinement (default: `true`) |
+| `SESSION_REFINEMENT_SEMANTIC` | Enable semantic splitting (default: `true`) |
+| `SESSION_REFINEMENT_SIMILARITY_THRESHOLD` | URL similarity threshold (default: `0.5`) |
 
 ## Design Principles
 

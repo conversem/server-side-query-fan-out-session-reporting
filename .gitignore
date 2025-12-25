@@ -84,3 +84,13 @@ data/experiments/
 data/temporal_analysis/
 data/visualizations/
 data/reports/
+
+# Development - Task Master internal files (not rules)
+.taskmaster
+
+# Internal planning documents (PRDs, audits, etc.)
+docs/planning/
+
+# Cursor - ignore internal state but keep rules
+.cursor/*
+!.cursor/rules/

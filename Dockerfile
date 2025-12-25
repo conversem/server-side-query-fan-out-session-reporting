@@ -1,22 +1,11 @@
-# LLM Bot Traffic Analysis Pipeline - Development Environment
-# Includes Google Cloud CLI and Python for BigQuery operations
+# LLM Bot Traffic Analysis Pipeline
+# Multi-provider CDN log ingestion and analysis
 
-FROM python:3.11-slim
+FROM python:3.12-slim
 
-# Install system dependencies
+# Install minimal system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
-    gnupg \
-    apt-transport-https \
-    ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
-
-# Install Google Cloud CLI
-RUN echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" \
-    | tee -a /etc/apt/sources.list.d/google-cloud-sdk.list \
-    && curl https://packages.cloud.google.com/apt/doc/apt-key.gpg \
-    | gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg \
-    && apt-get update && apt-get install -y google-cloud-cli \
     && rm -rf /var/lib/apt/lists/*
 
 # Set working directory
@@ -34,9 +23,8 @@ COPY . .
 # Install the package in development mode
 RUN pip install -e .
 
-# Create directories for gcloud config and credentials
-RUN mkdir -p /root/.config/gcloud
+# Create data directory
+RUN mkdir -p /app/data
 
 # Default command
 CMD ["bash"]
-

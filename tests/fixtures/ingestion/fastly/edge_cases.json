@@ -1,0 +1,40 @@
+[
+  {
+    "timestamp": 1705320645,
+    "client_ip": "192.0.2.100",
+    "method": "GET",
+    "host": "example.com",
+    "path": "/unix-timestamp",
+    "status_code": 200,
+    "user_agent": "Mozilla/5.0 (compatible; GPTBot/1.0)"
+  },
+  {
+    "timestamp": "2024-01-15T12:30:46Z",
+    "client_ip": "2001:db8::1",
+    "method": "GET",
+    "host": "example.com",
+    "path": "/ipv6-test",
+    "status_code": 200,
+    "user_agent": "Bytespider/1.0"
+  },
+  {
+    "timestamp": "2024-01-15T12:30:47Z",
+    "client_ip": "192.0.2.102",
+    "method": "GET",
+    "host": "example.com",
+    "path": "/missing-optional",
+    "status_code": 200,
+    "user_agent": "cohere-ai/1.0"
+  },
+  {
+    "timestamp": "2024-01-15T12:30:48Z",
+    "client_ip": "192.0.2.103",
+    "method": "GET",
+    "host": null,
+    "path": "/null-host",
+    "status_code": 404,
+    "user_agent": "PerplexityBot/1.0",
+    "response_bytes": null,
+    "response_time_ms": null
+  }
+]

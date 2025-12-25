@@ -1,0 +1,55 @@
+[
+  {
+    "timestamp": "2024-01-15T12:30:45+00:00",
+    "client_ip": "192.0.2.100",
+    "method": "GET",
+    "host": "example.com",
+    "path": "/api/data",
+    "status_code": 200,
+    "user_agent": "Mozilla/5.0 (compatible; GPTBot/1.0)",
+    "query_string": "?key=value",
+    "response_bytes": 1024,
+    "request_bytes": 256,
+    "response_time_ms": 150,
+    "cache_status": "HIT",
+    "edge_location": "LAX",
+    "referer": "https://example.com/referer",
+    "protocol": "HTTP/1.1",
+    "ssl_protocol": "TLSv1.3"
+  },
+  {
+    "timestamp": "2024-01-15T12:30:46+00:00",
+    "client_ip": "192.0.2.101",
+    "method": "POST",
+    "host": "example.com",
+    "path": "/api/submit",
+    "status_code": 201,
+    "user_agent": "Mozilla/5.0 (compatible; ChatGPT-User/1.0)",
+    "response_bytes": 2048,
+    "request_bytes": 512,
+    "response_time_ms": 200,
+    "cache_status": "MISS",
+    "edge_location": "DFW",
+    "protocol": "HTTP/2",
+    "ssl_protocol": "TLSv1.3"
+  },
+  {
+    "timestamp": "2024-01-15T12:30:47+00:00",
+    "client_ip": "192.0.2.102",
+    "method": "GET",
+    "host": "example.com",
+    "path": "/docs",
+    "status_code": 200,
+    "user_agent": "Mozilla/5.0 (compatible; ClaudeBot/1.0)",
+    "response_bytes": 4096,
+    "request_bytes": 128,
+    "response_time_ms": 100,
+    "cache_status": "HIT",
+    "edge_location": "SFO",
+    "referer": "https://example.com",
+    "protocol": "HTTP/1.1",
+    "ssl_protocol": "TLSv1.2"
+  }
+]
+
+

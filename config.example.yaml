@@ -18,3 +18,27 @@ storage:
 cloudflare:
   api_token: "your-cloudflare-api-token"  # SENSITIVE - Get from Cloudflare dashboard
   zone_id: "your-zone-id"                  # SENSITIVE - Your Cloudflare zone ID
+
+# Session Refinement Configuration (Collision Detection)
+# Controls semantic splitting of anomalous bundles for improved session purity
+session_refinement:
+  # Master feature flag - ON by default for best session purity
+  # Set to false to disable refinement (faster but lower purity)
+  enabled: true
+
+  # Refinement strategies
+  enable_semantic_refinement: true   # Use URL similarity for splitting (recommended)
+  enable_ip_based_refinement: false  # Research shows IP does not discriminate collisions (r=0.023)
+
+  # Collision detection thresholds
+  collision_ip_threshold: 2          # Min unique IPs to flag as collision
+  collision_homogeneity_threshold: 0.5  # IP homogeneity below this flags collision
+
+  # Semantic splitting parameters
+  similarity_threshold: 0.5          # Min URL similarity to create graph edge
+  min_sub_bundle_size: 2             # Min requests per sub-bundle after split
+  min_mibcs_improvement: 0.05        # Min MIBCS improvement to accept split
+
+  # Logging and metrics
+  log_refinement_details: true       # Log detailed refinement decisions
+  collect_refinement_metrics: true   # Collect metrics for monitoring

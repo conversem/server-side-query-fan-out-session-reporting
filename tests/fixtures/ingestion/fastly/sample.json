@@ -1,0 +1,39 @@
+[
+  {
+    "timestamp": "2024-01-15T12:30:45Z",
+    "client_ip": "192.0.2.100",
+    "method": "GET",
+    "host": "example.com",
+    "path": "/api/data",
+    "query_string": "key=value",
+    "status_code": 200,
+    "user_agent": "Mozilla/5.0 (compatible; GPTBot/1.0; +https://openai.com/gptbot)",
+    "response_bytes": 1024,
+    "response_time_ms": 150,
+    "protocol": "HTTP/1.1"
+  },
+  {
+    "timestamp": "2024-01-15T12:30:46Z",
+    "client_ip": "192.0.2.101",
+    "method": "POST",
+    "host": "api.example.com",
+    "path": "/submit",
+    "status_code": 201,
+    "user_agent": "ClaudeBot/1.0 (+https://anthropic.com/claudebot)",
+    "response_bytes": 2048,
+    "response_time_ms": 200,
+    "protocol": "HTTP/2.0"
+  },
+  {
+    "timestamp": "2024-01-15T12:30:47Z",
+    "client_ip": "192.0.2.102",
+    "method": "GET",
+    "host": "cdn.example.com",
+    "path": "/assets/style.css",
+    "status_code": 200,
+    "user_agent": "Mozilla/5.0 (compatible; ChatGPT-User/1.0)",
+    "response_bytes": 4096,
+    "response_time_ms": 50
+  }
+]
+

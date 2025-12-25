@@ -1,0 +1,5 @@
+timestamp,client_ip,method,host,path,query_string,status_code,user_agent,response_bytes,response_time_ms
+2024-01-15T12:30:45Z,192.0.2.100,GET,example.com,/api/data,key=value,200,"Mozilla/5.0 (compatible; GPTBot/1.0; +https://openai.com/gptbot)",1024,150
+2024-01-15T12:30:46Z,192.0.2.101,POST,api.example.com,/submit,,201,"ClaudeBot/1.0 (+https://anthropic.com/claudebot)",2048,200
+2024-01-15T12:30:47Z,192.0.2.102,GET,cdn.example.com,/assets/style.css,,200,"Mozilla/5.0 (compatible; ChatGPT-User/1.0)",4096,50
+

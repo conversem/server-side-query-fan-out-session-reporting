@@ -1,0 +1,22 @@
+[
+  {
+    "request_time": "2024-01-15T12:30:45Z",
+    "clientip": "192.0.2.100",
+    "http_method": "GET",
+    "hostname": "example.com",
+    "uri": "/api/data",
+    "http_status": 200,
+    "ua": "Mozilla/5.0 (compatible; GPTBot/1.0)",
+    "bytes": 1024
+  },
+  {
+    "request_time": "2024-01-15T12:30:46Z",
+    "clientip": "192.0.2.101",
+    "http_method": "POST",
+    "hostname": "api.example.com",
+    "uri": "/submit",
+    "http_status": 201,
+    "ua": "PerplexityBot/1.0",
+    "bytes": 2048
+  }
+]

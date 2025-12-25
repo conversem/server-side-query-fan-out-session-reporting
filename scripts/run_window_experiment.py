@@ -9,13 +9,13 @@ Usage:
     python scripts/run_window_experiment.py [options]
 
 Examples:
-    # Run with default settings
+    # Run with default settings (uses data/llm-bot-logs.db)
     python scripts/run_window_experiment.py
 
-    # Custom windows and output
+    # Custom database and windows
     python scripts/run_window_experiment.py \
-        --windows 100,500,1000,2000,3000,5000 \
-        --output-dir data/experiments/custom_run
+        --db-path data/my-logs.db \
+        --windows 100,500,1000,2000,3000,5000
 
     # Use sentence transformers for embeddings
     python scripts/run_window_experiment.py --embedding-method transformer
@@ -49,18 +49,24 @@ def parse_args() -> argparse.Namespace:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  %(prog)s --data-path data/llm_bot_requests.csv
+  %(prog)s --db-path data/llm-bot-logs.db
   %(prog)s --windows 100,500,1000,3000,5000
   %(prog)s --embedding-method transformer --output-dir data/exp_transformer
         """,
     )
 
-    # Data settings
+    # Data settings - SQLite source
     parser.add_argument(
-        "--data-path",
+        "--db-path",
         type=str,
-        default="data/llm_bot_requests.csv",
-        help="Path to CSV file with request data",
+        default="data/llm-bot-logs.db",
+        help="Path to SQLite database file",
+    )
+    parser.add_argument(
+        "--table-name",
+        type=str,
+        default="bot_requests_daily",
+        help="Table to read from (default: bot_requests_daily)",
     )
     parser.add_argument(
         "--filter-category",
@@ -77,14 +83,14 @@ Examples:
     parser.add_argument(
         "--timestamp-col",
         type=str,
-        default="datetime",
-        help="Name of timestamp column",
+        default="request_timestamp",
+        help="Name of timestamp column (default: request_timestamp)",
     )
     parser.add_argument(
         "--url-col",
         type=str,
-        default="url",
-        help="Name of URL column",
+        default="request_uri",
+        help="Name of URL column (default: request_uri)",
     )
     parser.add_argument(
         "--group-by",
@@ -218,7 +224,8 @@ def main() -> int:
 
     # Build experiment config
     config = ExperimentConfig(
-        data_path=args.data_path,
+        db_path=args.db_path,
+        table_name=args.table_name,
         timestamp_col=args.timestamp_col,
         url_col=args.url_col,
         group_by=args.group_by,
@@ -233,9 +240,9 @@ def main() -> int:
         experiment_name=args.experiment_name,
     )
 
-    # Check data file exists
-    if not Path(config.data_path).exists():
-        logger.error(f"Data file not found: {config.data_path}")
+    # Check database file exists
+    if not Path(config.db_path).exists():
+        logger.error(f"Database not found: {config.db_path}")
         return 1
 
     # Run experiment

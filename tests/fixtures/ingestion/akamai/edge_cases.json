@@ -1,0 +1,40 @@
+[
+  {
+    "reqTimeSec": 1705320645,
+    "clientIP": "192.0.2.100",
+    "requestMethod": "GET",
+    "requestHost": "example.com",
+    "requestPath": "/unix-seconds",
+    "responseStatus": 200,
+    "userAgent": "Mozilla/5.0 (compatible; GPTBot/1.0)"
+  },
+  {
+    "reqTimeMs": 1705320646123,
+    "clientIP": "192.0.2.101",
+    "requestMethod": "GET",
+    "requestHost": "example.com",
+    "requestPath": "/unix-milliseconds",
+    "responseStatus": 200,
+    "userAgent": "Bytespider/1.0"
+  },
+  {
+    "requestTime": "2024-01-15T12:30:47Z",
+    "clientIP": "2001:db8::1",
+    "requestMethod": "GET",
+    "requestHost": "example.com",
+    "requestPath": "/ipv6-test",
+    "responseStatus": 200,
+    "userAgent": "PerplexityBot/1.0"
+  },
+  {
+    "requestTime": "2024-01-15T12:30:48Z",
+    "clientIP": "192.0.2.103",
+    "requestMethod": "GET",
+    "requestHost": null,
+    "requestPath": "/null-host",
+    "responseStatus": 404,
+    "userAgent": "cohere-ai/1.0",
+    "bytes": null,
+    "turnaroundTimeMs": null
+  }
+]

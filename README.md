@@ -24,6 +24,7 @@ This framework allows you to reproduce the research and apply it to your own ser
 
 - **Research-backed methodology**: Uses OptScore composite metric for window optimization
 - **Semantic analysis**: TF-IDF and Transformer-based URL embeddings
+- **Session refinement**: Collision detection and semantic splitting for improved purity
 - **Provider-specific tuning**: Different bots have different behaviors
 - **Reproducible experiments**: Configurable parameters with validation
 
@@ -31,9 +32,23 @@ This framework allows you to reproduce the research and apply it to your own ser
 
 ### Prerequisites
 
+**Required:**
 - Python 3.11+
+- pip or pipenv for package management
+- 2GB+ free disk space for logs and database
+
+**For Cloudflare Logpull API:**
 - Cloudflare account with API access
-- SOPS and Age for secrets encryption
+- API token with "Zone Logs:Read" permission
+- Zone ID for your domain
+
+**For File-Based Ingestion:**
+- Exported log files from your CDN provider
+- Supported formats: CSV, JSON, NDJSON, W3C Extended Log Format
+- Gzip compression supported (.gz files)
+
+**For Secrets Management:**
+- SOPS and Age for encrypted configuration
 
 ### 1. Clone and Setup
 
@@ -80,13 +95,41 @@ See [docs/sops/quickstart.md](docs/sops/quickstart.md) for detailed instructions
 
 ### 3. Ingest Logs
 
+**From Cloudflare API:**
 ```bash
 # Pull last 7 days of logs from Cloudflare
-python scripts/ingest_logs.py --days 7
-
-# Or specific date range
-python scripts/ingest_logs.py --start-date 2024-01-01 --end-date 2024-01-07
+python scripts/ingest_logs.py --provider cloudflare --input api://zone_id \
+  --start-date 2024-01-01 --end-date 2024-01-07
 ```
+
+**From Exported Files (8 providers supported):**
+```bash
+# AWS CloudFront (W3C format)
+python scripts/ingest_logs.py --provider aws_cloudfront --input ./cloudfront-logs/
+
+# AWS ALB access logs
+python scripts/ingest_logs.py --provider aws_alb --input ./alb-logs/
+
+# Cloudflare (JSON/CSV)
+python scripts/ingest_logs.py --provider cloudflare --input ./cloudflare-export.json
+
+# Azure CDN / Front Door
+python scripts/ingest_logs.py --provider azure_cdn --input ./azure-logs.json
+
+# Google Cloud CDN
+python scripts/ingest_logs.py --provider gcp_cdn --input ./gcp-logs.json
+
+# Fastly
+python scripts/ingest_logs.py --provider fastly --input ./fastly-logs.json
+
+# Akamai DataStream
+python scripts/ingest_logs.py --provider akamai --input ./akamai-logs.json
+
+# Universal format (CSV/JSON from any provider)
+python scripts/ingest_logs.py --provider universal --input ./logs.csv
+```
+
+See [Provider Guides](docs/ingestion/providers/) for detailed export instructions.
 
 ### 4. Run ETL Pipeline
 
@@ -149,6 +192,7 @@ Running `run_window_experiment.py` produces:
 
 ```
 ├── src/llm_bot_pipeline/
+│   ├── ingestion/       # Multi-provider log ingestion (8 adapters)
 │   ├── cloudflare/      # Logpull API integration
 │   ├── storage/         # SQLite storage layer
 │   ├── pipeline/        # ETL processing
@@ -183,9 +227,31 @@ cloudflare:
   zone_id: "your-zone-id"
 ```
 
+## Security
+
+The ingestion pipeline includes multiple security layers for processing untrusted log data:
+
+- **Path Traversal Protection** - Prevents directory escape attacks with `--base-dir`
+- **Input Sanitization** - Cleans field values and removes control characters
+- **Field Length Limits** - Prevents DoS via oversized fields
+- **Rate Limiting** - Protects API endpoints from abuse
+- **File Size Limits** - Configurable with `--max-file-size`
+
+See [docs/ingestion/security.md](docs/ingestion/security.md) for detailed security documentation.
+
 ## Documentation
 
 - [Architecture Overview](docs/architecture.md)
+- [Security Guide](docs/ingestion/security.md)
+- [CLI Usage](docs/ingestion/cli-usage.md)
+- [Provider Guides](docs/ingestion/providers/)
+  - [AWS CloudFront](docs/ingestion/providers/aws-cloudfront.md)
+  - [AWS ALB](docs/ingestion/providers/aws-alb-format.md)
+  - [Cloudflare](docs/ingestion/providers/cloudflare.md)
+  - [Azure CDN](docs/ingestion/providers/azure-cdn.md)
+  - [Google Cloud CDN](docs/ingestion/providers/gcp-cdn-format.md)
+  - [Fastly](docs/ingestion/providers/fastly-format.md)
+  - [Akamai](docs/ingestion/providers/akamai-format.md)
 - [SOPS Quick Start](docs/sops/quickstart.md)
 - [Research Article: The Query Fan-Out Session](https://conversem.com/the-query-fan-out-session/)
 

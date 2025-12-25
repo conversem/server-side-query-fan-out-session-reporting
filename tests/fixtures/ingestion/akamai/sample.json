@@ -1,0 +1,44 @@
+[
+  {
+    "requestTime": "2024-01-15T12:30:45.123Z",
+    "clientIP": "192.0.2.100",
+    "requestMethod": "GET",
+    "requestHost": "example.com",
+    "requestPath": "/api/data",
+    "queryString": "key=value",
+    "responseStatus": 200,
+    "userAgent": "Mozilla/5.0 (compatible; GPTBot/1.0; +https://openai.com/gptbot)",
+    "bytes": 1024,
+    "turnaroundTimeMs": 150,
+    "cacheStatus": "HIT",
+    "tlsVersion": "TLSv1.3",
+    "requestProtocol": "HTTP/1.1"
+  },
+  {
+    "requestTime": "2024-01-15T12:30:46.000Z",
+    "clientIP": "192.0.2.101",
+    "requestMethod": "POST",
+    "requestHost": "api.example.com",
+    "requestPath": "/submit",
+    "responseStatus": 201,
+    "userAgent": "ClaudeBot/1.0 (+https://anthropic.com/claudebot)",
+    "bytes": 2048,
+    "turnaroundTimeMs": 200,
+    "cacheStatus": "MISS",
+    "tlsVersion": "TLSv1.3",
+    "requestProtocol": "HTTP/2"
+  },
+  {
+    "requestTime": "2024-01-15T12:30:47.000Z",
+    "clientIP": "192.0.2.102",
+    "requestMethod": "GET",
+    "requestHost": "cdn.example.com",
+    "requestPath": "/assets/style.css",
+    "responseStatus": 200,
+    "userAgent": "Mozilla/5.0 (compatible; ChatGPT-User/1.0)",
+    "bytes": 4096,
+    "turnaroundTimeMs": 50,
+    "cacheStatus": "HIT"
+  }
+]
+

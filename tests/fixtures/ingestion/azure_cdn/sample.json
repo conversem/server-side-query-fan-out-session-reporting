@@ -1,0 +1,53 @@
+[
+  {
+    "Time": "2024-01-15T12:30:45Z",
+    "ClientIp": "192.0.2.100",
+    "HttpMethod": "GET",
+    "HostName": "example.com",
+    "RequestUri": "https://example.com/api/data?key=value",
+    "HttpStatusCode": 200,
+    "UserAgent": "Mozilla/5.0 (compatible; GPTBot/1.0)",
+    "ResponseBytes": 1024,
+    "RequestBytes": 256,
+    "TimeTaken": 0.150,
+    "CacheStatus": "HIT",
+    "Pop": "LAX",
+    "Referrer": "https://example.com/referer",
+    "RequestProtocol": "HTTPS",
+    "SecurityProtocol": "TLSv1.3"
+  },
+  {
+    "Time": "2024-01-15T12:30:46Z",
+    "ClientIp": "192.0.2.101",
+    "HttpMethod": "POST",
+    "HostName": "example.com",
+    "RequestUri": "https://example.com/api/submit",
+    "HttpStatusCode": 201,
+    "UserAgent": "Mozilla/5.0 (compatible; ChatGPT-User/1.0)",
+    "ResponseBytes": 2048,
+    "RequestBytes": 512,
+    "TimeTaken": 0.200,
+    "CacheStatus": "MISS",
+    "Pop": "DFW",
+    "RequestProtocol": "HTTPS",
+    "SecurityProtocol": "TLSv1.3"
+  },
+  {
+    "Time": "2024-01-15T12:30:47Z",
+    "ClientIp": "192.0.2.102",
+    "HttpMethod": "GET",
+    "HostName": "example.com",
+    "RequestUri": "https://example.com/docs",
+    "HttpStatusCode": 200,
+    "UserAgent": "Mozilla/5.0 (compatible; ClaudeBot/1.0)",
+    "ResponseBytes": 4096,
+    "RequestBytes": 128,
+    "TimeTaken": 0.100,
+    "CacheStatus": "HIT",
+    "Pop": "SFO",
+    "Referrer": "https://example.com",
+    "RequestProtocol": "HTTPS",
+    "SecurityProtocol": "TLSv1.2"
+  }
+]
+

@@ -10,6 +10,7 @@ Orchestrates the full experiment workflow:
 
 import json
 import logging
+import sqlite3
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -18,6 +19,7 @@ from typing import Optional
 import numpy as np
 import pandas as pd
 
+from ..storage.sqlite_backend import VALID_TABLES
 from .semantic_embeddings import URLEmbedder
 from .temporal_analysis import TemporalAnalyzer, compute_bundle_statistics
 from .window_optimizer import (
@@ -27,6 +29,28 @@ from .window_optimizer import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _validate_table_name(table_name: str) -> str:
+    """
+    Validate table name to prevent SQL injection.
+
+    Args:
+        table_name: Table name to validate
+
+    Returns:
+        Validated table name
+
+    Raises:
+        ValueError: If table name is not in allowed list
+    """
+    if table_name not in VALID_TABLES:
+        raise ValueError(
+            f"Invalid table name: '{table_name}'. "
+            f"Must be one of: {sorted(VALID_TABLES)}"
+        )
+    return table_name
+
 
 # Try to import scipy for statistical tests
 try:
@@ -42,10 +66,11 @@ except ImportError:
 class ExperimentConfig:
     """Configuration for a window optimization experiment."""
 
-    # Data settings
-    data_path: str
-    timestamp_col: str = "datetime"
-    url_col: str = "url"
+    # Data settings - SQLite source
+    db_path: str = "data/llm-bot-logs.db"
+    table_name: str = "bot_requests_daily"
+    timestamp_col: str = "request_timestamp"  # Match SQLite schema
+    url_col: str = "request_uri"  # Match SQLite schema
     group_by: str = "bot_provider"
     filter_category: Optional[str] = "user_request"
     exclude_providers: list[str] = field(
@@ -143,14 +168,26 @@ class ExperimentRunner:
 
     def load_data(self) -> pd.DataFrame:
         """
-        Load and preprocess experiment data.
+        Load and preprocess experiment data from SQLite.
 
         Returns:
             Preprocessed DataFrame
         """
-        logger.info(f"Loading data from {self.config.data_path}")
-        df = pd.read_csv(self.config.data_path)
-        logger.info(f"Loaded {len(df):,} records")
+        db_path = Path(self.config.db_path)
+        if not db_path.exists():
+            raise FileNotFoundError(f"Database not found: {self.config.db_path}")
+
+        logger.info(f"Loading data from {self.config.db_path}")
+
+        # Validate table name to prevent SQL injection
+        table_name = _validate_table_name(self.config.table_name)
+
+        # Query the SQLite database
+        query = f"SELECT * FROM {table_name}"
+        with sqlite3.connect(str(db_path)) as conn:
+            df = pd.read_sql_query(query, conn)
+
+        logger.info(f"Loaded {len(df):,} records from {self.config.table_name}")
 
         # Filter by category if specified
         if self.config.filter_category and "bot_category" in df.columns:
@@ -459,7 +496,8 @@ class ExperimentRunner:
 
         # Save configuration
         config_data = {
-            "data_path": self.config.data_path,
+            "db_path": self.config.db_path,
+            "table_name": self.config.table_name,
             "timestamp_col": self.config.timestamp_col,
             "url_col": self.config.url_col,
             "group_by": self.config.group_by,
@@ -525,7 +563,7 @@ class ExperimentRunner:
         print("=" * 70)
 
         print(f"\nExperiment Time: {r.timestamp}")
-        print(f"Data Source: {self.config.data_path}")
+        print(f"Data Source: {self.config.db_path} ({self.config.table_name})")
 
         print("\n--- DATA SUMMARY ---")
         print(f"Total Records:      {r.total_records:,}")

@@ -5,7 +5,10 @@ Tests the core session grouping logic that uses a 100ms time window
 to bundle temporally-clustered requests into sessions.
 """
 
+import sqlite3
+import tempfile
 from datetime import datetime, timedelta
+from pathlib import Path
 
 import pandas as pd
 import pytest
@@ -35,11 +38,13 @@ class TestCreateTemporalBundles:
     def _create_requests_df(
         self, timestamps: list[datetime], provider: str = "OpenAI"
     ) -> pd.DataFrame:
-        """Helper to create a DataFrame with test requests."""
+        """Helper to create a DataFrame with test requests using SQLite schema."""
         return pd.DataFrame(
             {
-                "datetime": timestamps,
-                "url": [f"https://example.com/page{i}" for i in range(len(timestamps))],
+                "request_timestamp": timestamps,
+                "request_uri": [
+                    f"https://example.com/page{i}" for i in range(len(timestamps))
+                ],
                 "bot_provider": [provider] * len(timestamps),
             }
         )
@@ -146,13 +151,13 @@ class TestCreateTemporalBundles:
         base_time = datetime(2024, 1, 15, 10, 0, 0)
         df = pd.DataFrame(
             {
-                "datetime": [
+                "request_timestamp": [
                     base_time,
                     base_time + timedelta(milliseconds=20),
                     base_time + timedelta(milliseconds=40),
                     base_time + timedelta(milliseconds=60),
                 ],
-                "url": [f"https://example.com/page{i}" for i in range(4)],
+                "request_uri": [f"https://example.com/page{i}" for i in range(4)],
                 "bot_provider": ["OpenAI", "OpenAI", "Perplexity", "Perplexity"],
             }
         )
@@ -189,7 +194,7 @@ class TestCreateTemporalBundles:
 
     def test_empty_dataframe_returns_empty_list(self):
         """Empty DataFrame should return empty bundle list."""
-        df = pd.DataFrame(columns=["datetime", "url", "bot_provider"])
+        df = pd.DataFrame(columns=["request_timestamp", "request_uri", "bot_provider"])
 
         bundles = create_temporal_bundles(df, window_ms=100)
 
@@ -218,18 +223,18 @@ class TestTemporalAnalyzer:
     """Tests for TemporalAnalyzer class."""
 
     def _create_test_df(self) -> pd.DataFrame:
-        """Create test DataFrame with known patterns."""
+        """Create test DataFrame with known patterns using SQLite schema column names."""
         base_time = datetime(2024, 1, 15, 10, 0, 0)
         return pd.DataFrame(
             {
-                "datetime": [
+                "request_timestamp": [
                     base_time,
                     base_time + timedelta(milliseconds=20),
                     base_time + timedelta(milliseconds=50),
                     base_time + timedelta(milliseconds=500),  # Gap
                     base_time + timedelta(milliseconds=520),
                 ],
-                "url": [f"https://example.com/page{i}" for i in range(5)],
+                "request_uri": [f"https://example.com/page{i}" for i in range(5)],
                 "bot_provider": ["OpenAI"] * 5,
             }
         )
@@ -277,6 +282,61 @@ class TestTemporalAnalyzer:
         assert stats["total_bundles"] == 2
         assert stats["total_requests"] == 5
         assert stats["mean_bundle_size"] == 2.5  # (3+2)/2
+
+    def test_load_from_sqlite_returns_self_for_chaining(self, tmp_path):
+        """load_from_sqlite should return self for method chaining."""
+        # Create a test SQLite database
+        db_path = tmp_path / "test.db"
+        df = self._create_test_df()
+
+        # Write to SQLite
+        with sqlite3.connect(str(db_path)) as conn:
+            df.to_sql("bot_requests_daily", conn, index=False)
+
+        # Test loading with default column names (matches SQLite schema)
+        analyzer = TemporalAnalyzer()
+        result = analyzer.load_from_sqlite(str(db_path), "bot_requests_daily")
+
+        assert result is analyzer
+
+    def test_load_from_sqlite_file_not_found(self):
+        """load_from_sqlite should raise FileNotFoundError for missing db."""
+        analyzer = TemporalAnalyzer()
+
+        with pytest.raises(FileNotFoundError, match="Database not found"):
+            analyzer.load_from_sqlite("/nonexistent/path.db")
+
+    def test_load_from_sqlite_creates_bundles(self, tmp_path):
+        """load_from_sqlite should load data correctly for bundle creation."""
+        # Create a test SQLite database
+        db_path = tmp_path / "test.db"
+        df = self._create_test_df()
+
+        with sqlite3.connect(str(db_path)) as conn:
+            df.to_sql("bot_requests_daily", conn, index=False)
+
+        # Uses default column names matching SQLite schema
+        analyzer = TemporalAnalyzer()
+        analyzer.load_from_sqlite(str(db_path), "bot_requests_daily")
+        bundles = analyzer.create_bundles(window_ms=100)
+
+        # Should have 2 bundles: first 3 requests, then 2 requests
+        assert len(bundles) == 2
+        assert bundles[0].request_count == 3
+        assert bundles[1].request_count == 2
+
+    def test_load_from_sqlite_invalid_table_name(self, tmp_path):
+        """load_from_sqlite should reject invalid table names."""
+        db_path = tmp_path / "test.db"
+        df = self._create_test_df()
+
+        with sqlite3.connect(str(db_path)) as conn:
+            df.to_sql("bot_requests_daily", conn, index=False)
+
+        analyzer = TemporalAnalyzer()
+
+        with pytest.raises(ValueError, match="Invalid table name"):
+            analyzer.load_from_sqlite(str(db_path), "malicious_table; DROP TABLE--")
 
 
 class TestComputeBundleStatistics:
@@ -352,7 +412,7 @@ class TestComputeInterRequestDeltas:
         base_time = datetime(2024, 1, 15, 10, 0, 0)
         df = pd.DataFrame(
             {
-                "datetime": [
+                "request_timestamp": [
                     base_time,
                     base_time + timedelta(milliseconds=100),
                     base_time + timedelta(milliseconds=250),

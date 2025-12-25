@@ -1,0 +1,4 @@
+{"timestamp":"2024-01-15T12:30:45.123456Z","severity":"INFO","httpRequest":{"remoteIp":"192.0.2.100","requestMethod":"GET","requestUrl":"https://example.com/api/data?key=value","status":200,"userAgent":"Mozilla/5.0 (compatible; GPTBot/1.0; +https://openai.com/gptbot)","responseSize":"1024","latency":"0.150s","cacheHit":true}}
+{"timestamp":"2024-01-15T12:30:46.000000Z","severity":"INFO","httpRequest":{"remoteIp":"192.0.2.101","requestMethod":"POST","requestUrl":"https://api.example.com/submit","status":201,"userAgent":"ClaudeBot/1.0","responseSize":"2048","latency":"0.200s","cacheHit":false,"cacheLookup":true}}
+{"timestamp":"2024-01-15T12:30:47.000000Z","severity":"INFO","httpRequest":{"remoteIp":"192.0.2.102","requestMethod":"GET","requestUrl":"https://cdn.example.com/assets/style.css","status":200,"userAgent":"Mozilla/5.0 (compatible; ChatGPT-User/1.0)","responseSize":"4096","latency":"0.010s","cacheHit":true}}
+
