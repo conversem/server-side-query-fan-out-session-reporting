@@ -19,7 +19,7 @@ import argparse
 import json
 import logging
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pandas as pd
@@ -143,7 +143,7 @@ def save_results(
         json.dump(
             {
                 "windows_ms": candidate_windows,
-                "generated_at": datetime.now().isoformat(),
+                "generated_at": datetime.now(timezone.utc).isoformat(),
             },
             f,
             indent=2,

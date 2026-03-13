@@ -56,7 +56,7 @@ import json
 import logging
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -432,6 +432,112 @@ def convert_to_backend_record(record, source_provider: str = None) -> dict:
     }
 
 
+def _insert_batch(batch: list, backend, results: dict, validate_only: bool) -> None:
+    """Insert batch to backend, updating results. No-op if empty or validate_only."""
+    if not batch or validate_only or not backend:
+        return
+    try:
+        inserted = backend.insert_raw_records(batch)
+        results["records_skipped"] += len(batch) - inserted
+    except Exception as e:
+        logger.error(f"Failed to insert batch: {e}")
+        results["records_failed"] += len(batch)
+        results["errors"].append(f"Batch insertion failed: {e}")
+
+
+def _iter_dates_in_range(start: datetime, end: datetime):
+    """Yield dates (midnight UTC) from start to end inclusive."""
+    current = start.replace(hour=0, minute=0, second=0, microsecond=0)
+    if current.tzinfo is None:
+        current = current.replace(tzinfo=timezone.utc)
+    end_date = end.replace(hour=0, minute=0, second=0, microsecond=0)
+    if end_date.tzinfo is None:
+        end_date = end_date.replace(tzinfo=timezone.utc)
+    while current <= end_date:
+        yield current
+        current += timedelta(days=1)
+
+
+def _init_backend(validate_only: bool, db_path, backend_type, results: dict):
+    """Initialize backend. Returns None if validate_only or on error (appends to results)."""
+    if validate_only:
+        return None
+    try:
+        kwargs = {"db_path": db_path} if db_path else {}
+        backend = get_backend(backend_type, **kwargs)
+        backend.initialize()
+        return backend
+    except Exception as e:
+        results["errors"].append(f"Failed to initialize backend: {e}")
+        return None
+
+
+def _should_iterate_by_day(
+    start_time: Optional[datetime], end_time: Optional[datetime]
+) -> bool:
+    """True if range spans 2+ days and we should iterate per day."""
+    if not start_time or not end_time or start_time > end_time:
+        return False
+    start_d = start_time.replace(hour=0, minute=0, second=0, microsecond=0)
+    end_d = end_time.replace(hour=0, minute=0, second=0, microsecond=0)
+    return (end_d - start_d).days >= 1
+
+
+def _ingest_single_day(
+    date: Optional[datetime],
+    adapter,
+    source: IngestionSource,
+    start_time: Optional[datetime],
+    end_time: Optional[datetime],
+    filter_bots: bool,
+    validate_only: bool,
+    backend,
+    batch_size: int,
+    results: dict,
+    provider_name: str,
+) -> None:
+    """Ingest records for one day. When date is set, use day bounds; else use start/end."""
+    if date is not None:
+        day_start = date.replace(hour=0, minute=0, second=0, microsecond=0)
+        day_start = (
+            day_start.replace(tzinfo=timezone.utc)
+            if day_start.tzinfo is None
+            else day_start
+        )
+        day_end = day_start + timedelta(days=1) - timedelta(microseconds=1)
+    else:
+        day_start, day_end = start_time, end_time
+
+    batch = []
+    last_progress_time = time.time()
+
+    for record in adapter.ingest(
+        source, start_time=day_start, end_time=day_end, filter_bots=filter_bots
+    ):
+        results["records_processed"] += 1
+        if validate_only:
+            continue
+
+        backend_record = convert_to_backend_record(
+            record, source_provider=provider_name
+        )
+        batch.append(backend_record)
+
+        if len(batch) >= batch_size:
+            _insert_batch(batch, backend, results, validate_only)
+            batch = []
+
+        if time.time() - last_progress_time >= 5:
+            msg = (
+                f"Processed {format_progress(results['records_processed'])} records..."
+            )
+            logger.info(msg)
+            print(f"  {msg}", flush=True)
+            last_progress_time = time.time()
+
+    _insert_batch(batch, backend, results, validate_only)
+
+
 def ingest_records(
     adapter,
     source: IngestionSource,
@@ -441,23 +547,9 @@ def ingest_records(
     validate_only: bool,
     db_path: Optional[Path] = None,
     batch_size: int = 1000,
+    backend_type: str = None,
 ) -> dict:
-    """
-    Ingest records using the adapter.
-
-    Args:
-        adapter: IngestionAdapter instance
-        source: IngestionSource configuration
-        start_time: Optional start time filter
-        end_time: Optional end time filter
-        filter_bots: If True, filter for LLM bots only
-        validate_only: If True, validate without inserting
-        db_path: Optional database path
-        batch_size: Records per batch for insertion
-
-    Returns:
-        Dictionary with ingestion statistics
-    """
+    """Ingest records. Iterates by day when range spans 2+ days; else single call."""
     provider_name = adapter.provider_name
     logger.info(f"Ingesting from {source.provider} ({source.source_type})")
 
@@ -470,75 +562,37 @@ def ingest_records(
         "start_time": time.time(),
     }
 
-    # Initialize backend if not validate-only
-    backend = None
-    if not validate_only:
-        try:
-            backend_kwargs = {}
-            if db_path:
-                backend_kwargs["db_path"] = db_path
-            backend = get_backend("sqlite", **backend_kwargs)
-            backend.initialize()
-        except Exception as e:
-            results["errors"].append(f"Failed to initialize backend: {e}")
-            return results
+    backend = _init_backend(validate_only, db_path, backend_type, results)
+    if not validate_only and results["errors"]:
+        return results
 
     try:
-        # Ingest records
-        batch = []
-        last_progress_time = time.time()
 
-        for record in adapter.ingest(
-            source, start_time=start_time, end_time=end_time, filter_bots=filter_bots
-        ):
-            results["records_processed"] += 1
-
-            if validate_only:
-                # Just count records for validation
-                continue
-
-            # Convert to backend format with source provider tracking
-            backend_record = convert_to_backend_record(
-                record, source_provider=provider_name
+        def _call(d):
+            _ingest_single_day(
+                d,
+                adapter,
+                source,
+                start_time,
+                end_time,
+                filter_bots,
+                validate_only,
+                backend,
+                batch_size,
+                results,
+                provider_name,
             )
-            batch.append(backend_record)
 
-            # Insert batch when full
-            if len(batch) >= batch_size:
-                try:
-                    inserted = backend.insert_raw_records(batch)
-                    results["records_skipped"] += len(batch) - inserted
-                    batch = []
-                except Exception as e:
-                    logger.error(f"Failed to insert batch: {e}")
-                    results["records_failed"] += len(batch)
-                    results["errors"].append(f"Batch insertion failed: {e}")
-                    batch = []
-
-            # Progress reporting every 5 seconds
-            if time.time() - last_progress_time >= 5:
-                progress_msg = f"Processed {format_progress(results['records_processed'])} records..."
-                logger.info(progress_msg)
-                # Also print to stdout for better visibility
-                print(f"  {progress_msg}", flush=True)
-                last_progress_time = time.time()
-
-        # Insert remaining records
-        if batch and not validate_only:
-            try:
-                inserted = backend.insert_raw_records(batch)
-                results["records_skipped"] += len(batch) - inserted
-            except Exception as e:
-                logger.error(f"Failed to insert final batch: {e}")
-                results["records_failed"] += len(batch)
-                results["errors"].append(f"Final batch insertion failed: {e}")
-
+        if _should_iterate_by_day(start_time, end_time):
+            for date in _iter_dates_in_range(start_time, end_time):
+                _call(date)
+        else:
+            _call(None)
     except (ParseError, SourceValidationError) as e:
         results["errors"].append(str(e))
     except Exception as e:
         results["errors"].append(f"Unexpected error: {e}")
         logger.exception("Unexpected error during ingestion")
-
     finally:
         if backend:
             backend.close()
@@ -623,6 +677,12 @@ Examples:
         "--end-date",
         type=parse_datetime,
         help="End time filter (ISO 8601 or YYYY-MM-DD)",
+    )
+    parser.add_argument(
+        "--backend",
+        choices=["sqlite", "bigquery"],
+        default=None,
+        help="Storage backend (default: from settings)",
     )
     parser.add_argument(
         "--db-path",
@@ -850,6 +910,7 @@ Examples:
             validate_only=args.validate_only,
             db_path=args.db_path,
             batch_size=args.batch_size,
+            backend_type=args.backend,
         )
 
         # Print summary

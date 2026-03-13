@@ -219,4 +219,3 @@ def list_providers() -> list[str]:
         Sorted list of provider identifiers
     """
     return IngestionRegistry.list_providers()
-

@@ -30,7 +30,6 @@ Usage:
 """
 
 from .base import IngestionAdapter, IngestionRecord, IngestionSource
-from .file_utils import open_file_auto_decompress
 from .exceptions import (
     IngestionError,
     ParseError,
@@ -38,6 +37,7 @@ from .exceptions import (
     SourceValidationError,
     ValidationError,
 )
+from .file_utils import open_file_auto_decompress
 from .registry import IngestionRegistry, get_adapter, list_providers, register_adapter
 from .security import (
     PathTraversalError,

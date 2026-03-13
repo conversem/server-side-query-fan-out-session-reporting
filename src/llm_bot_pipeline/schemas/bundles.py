@@ -18,6 +18,7 @@ QUERY_FANOUT_SESSIONS_COLUMNS = {
     # Session identification
     "session_id": "TEXT PRIMARY KEY",
     "session_date": "DATE NOT NULL",
+    "domain": "TEXT",
     # Temporal bounds
     "session_start_time": "TIMESTAMP NOT NULL",
     "session_end_time": "TIMESTAMP NOT NULL",
@@ -64,6 +65,7 @@ class QueryFanoutSession:
     bot_provider: str
     request_count: int
     unique_urls: int
+    domain: Optional[str] = None
     bot_name: Optional[str] = None
     mean_cosine_similarity: Optional[float] = None
     min_cosine_similarity: Optional[float] = None

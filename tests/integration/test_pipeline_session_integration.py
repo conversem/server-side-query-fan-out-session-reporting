@@ -338,6 +338,7 @@ class TestPipelineCLIIntegration:
             ],
             capture_output=True,
             text=True,
+            timeout=30,
             cwd=Path(__file__).parent.parent.parent,
         )
 
@@ -363,6 +364,7 @@ class TestPipelineCLIIntegration:
             ],
             capture_output=True,
             text=True,
+            timeout=30,
             cwd=Path(__file__).parent.parent.parent,
         )
 

@@ -187,6 +187,8 @@ class TestExperimentRunner:
         assert len(val_df) == 35 - int(35 * 0.8)
 
         # Train data should be earlier than validation data
-        train_max = pd.to_datetime(train_df[config.timestamp_col]).max()
-        val_min = pd.to_datetime(val_df[config.timestamp_col]).min()
+        train_max = pd.to_datetime(
+            train_df[config.timestamp_col], format="ISO8601"
+        ).max()
+        val_min = pd.to_datetime(val_df[config.timestamp_col], format="ISO8601").min()
         assert train_max <= val_min

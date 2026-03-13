@@ -24,7 +24,7 @@ from typing import Iterator, Optional
 import httpx
 from cloudflare import Cloudflare
 
-from ..config.constants import OUTPUT_FIELDS, OUTPUT_FIELDS_BASIC
+from ..config.constants import OUTPUT_FIELDS
 from ..config.settings import Settings, get_settings
 from ..utils.bot_classifier import classify_bot
 
@@ -151,9 +151,9 @@ def pull_logs(
     start_time: datetime,
     end_time: datetime,
     zone_id: Optional[str] = None,
+    domain: Optional[str] = None,
     settings: Optional[Settings] = None,
     fields: Optional[list[str]] = None,
-    filter_verified_bots: bool = True,
     filter_llm_bots: bool = True,
     rate_limiter: Optional[RateLimiter] = None,
 ) -> Iterator[dict]:
@@ -167,14 +167,14 @@ def pull_logs(
         start_time: Start time (UTC)
         end_time: End time (UTC)
         zone_id: Cloudflare zone ID (uses settings if None)
+        domain: Domain label injected into each record (for multi-domain support)
         settings: Application settings (uses default if None)
         fields: Fields to retrieve (uses OUTPUT_FIELDS if None)
-        filter_verified_bots: If True, only return verified bot traffic
         filter_llm_bots: If True, only return LLM bot traffic (by user-agent)
         rate_limiter: Rate limiter instance (creates default if None)
 
     Yields:
-        Log record dictionaries
+        Log record dictionaries (with ``domain`` key if provided)
 
     Raises:
         ValueError: If time range exceeds retention period
@@ -230,15 +230,17 @@ def pull_logs(
 
         # Fetch logs for this chunk
         try:
-            yield from _fetch_logs_chunk(
+            for record in _fetch_logs_chunk(
                 client=client,
                 zone_id=zone_id,
                 start_time=current_start,
                 end_time=current_end,
                 fields=fields,
-                filter_verified_bots=filter_verified_bots,
                 filter_llm_bots=filter_llm_bots,
-            )
+            ):
+                if domain is not None:
+                    record["domain"] = domain
+                yield record
         except Exception as e:
             chunks_failed += 1
             logger.error(
@@ -263,7 +265,6 @@ def _fetch_logs_chunk(
     start_time: datetime,
     end_time: datetime,
     fields: list[str],
-    filter_verified_bots: bool = True,
     filter_llm_bots: bool = True,
     retry_attempts: int = DEFAULT_RETRY_ATTEMPTS,
     base_delay: float = DEFAULT_BASE_DELAY_SECONDS,
@@ -277,7 +278,6 @@ def _fetch_logs_chunk(
         start_time: Chunk start time
         end_time: Chunk end time
         fields: Fields to retrieve
-        filter_verified_bots: Filter for verified bots
         filter_llm_bots: Filter for LLM bots by user-agent
         retry_attempts: Number of retry attempts
         base_delay: Base delay for exponential backoff
@@ -285,29 +285,22 @@ def _fetch_logs_chunk(
     Yields:
         Log record dictionaries
     """
-    # Use Unix epoch timestamps (seconds) - more reliable with Cloudflare API
     start_epoch = int(start_time.timestamp())
     end_epoch = int(end_time.timestamp())
-    now_epoch = int(datetime.now(timezone.utc).timestamp())
 
     logger.debug(
         f"Fetching logs: {start_time} to {end_time} (epoch: {start_epoch}-{end_epoch})"
     )
 
-    # Get API token for direct HTTP requests
     from ..config.settings import get_settings as _get_settings
 
     _settings = _get_settings()
     _api_token = _settings.cloudflare_api_token
 
     last_error = None
-    current_fields = fields  # Start with requested fields
 
     for attempt in range(retry_attempts):
         try:
-            # Use direct HTTP request instead of SDK method
-            # The SDK's logs.received.get() fails with 403 for Bot Management fields
-            # but direct HTTP requests with Bearer token work correctly
             api_url = (
                 f"https://api.cloudflare.com/client/v4/zones/{zone_id}/logs/received"
             )
@@ -318,26 +311,16 @@ def _fetch_logs_chunk(
             params = {
                 "start": start_epoch,
                 "end": end_epoch,
-                "fields": ",".join(current_fields),
+                "fields": ",".join(fields),
             }
 
             response = httpx.get(api_url, headers=headers, params=params, timeout=60.0)
 
-            # If 403 with full fields, try basic fields (without Bot Management)
-            if response.status_code == 403 and current_fields != OUTPUT_FIELDS_BASIC:
-                logger.warning(
-                    "Full fields failed (403), falling back to basic fields (no Bot Management)"
-                )
-                current_fields = OUTPUT_FIELDS_BASIC
-                continue  # Retry with basic fields
-
             if response.status_code != 200:
                 raise Exception(f"HTTP {response.status_code}: {response.text[:500]}")
 
-            # Process NDJSON response (one JSON object per line)
             record_count = 0
             filtered_count = 0
-            using_basic_fields = current_fields == OUTPUT_FIELDS_BASIC
             for line in response.text.strip().split("\n"):
                 if not line:
                     continue
@@ -346,20 +329,12 @@ def _fetch_logs_chunk(
                 except json.JSONDecodeError:
                     continue
 
-                # Apply verified bot filter if requested
-                # Skip this filter when using basic fields (no VerifiedBot field available)
-                if filter_verified_bots and not using_basic_fields:
-                    if not record.get("VerifiedBot", False):
-                        continue
-
-                # Apply LLM bot filter by user-agent pattern
                 if filter_llm_bots:
                     user_agent = record.get("ClientRequestUserAgent", "")
                     bot_info = classify_bot(user_agent)
                     if bot_info is None:
                         filtered_count += 1
                         continue
-                    # Enrich record with bot classification
                     record["_bot_name"] = bot_info.bot_name
                     record["_bot_provider"] = bot_info.bot_provider
                     record["_bot_category"] = bot_info.bot_category
@@ -373,14 +348,13 @@ def _fetch_logs_chunk(
                 )
             else:
                 logger.debug(f"Fetched {record_count} records for chunk")
-            return  # Success, exit retry loop
+            return
 
         except Exception as e:
             last_error = e
             if attempt < retry_attempts - 1:
-                # Exponential backoff with jitter to avoid thundering herd
                 delay = base_delay * (2**attempt)
-                jitter = random.uniform(0, delay * 0.1)  # Up to 10% jitter
+                jitter = random.uniform(0, delay * 0.1)
                 total_delay = delay + jitter
                 logger.warning(
                     f"Logpull attempt {attempt + 1} failed: {e}. "
@@ -390,7 +364,6 @@ def _fetch_logs_chunk(
             else:
                 logger.error(f"Logpull failed after {retry_attempts} attempts: {e}")
 
-    # All retries exhausted
     if last_error:
         raise last_error
 
@@ -398,8 +371,9 @@ def _fetch_logs_chunk(
 def pull_logs_for_date_range(
     start_date: date,
     end_date: date,
+    zone_id: Optional[str] = None,
+    domain: Optional[str] = None,
     settings: Optional[Settings] = None,
-    filter_verified_bots: bool = True,
     filter_llm_bots: bool = True,
 ) -> Iterator[dict]:
     """
@@ -410,14 +384,14 @@ def pull_logs_for_date_range(
     Args:
         start_date: Start date
         end_date: End date (inclusive)
+        zone_id: Cloudflare zone ID (uses settings if None)
+        domain: Domain label injected into each record (for multi-domain support)
         settings: Application settings
-        filter_verified_bots: Filter for verified bots
         filter_llm_bots: Filter for LLM bots by user-agent
 
     Yields:
         Log record dictionaries
     """
-    # Convert dates to datetime (UTC midnight)
     start_time = datetime.combine(start_date, datetime.min.time(), tzinfo=timezone.utc)
     end_time = datetime.combine(
         end_date + timedelta(days=1), datetime.min.time(), tzinfo=timezone.utc
@@ -426,8 +400,9 @@ def pull_logs_for_date_range(
     yield from pull_logs(
         start_time=start_time,
         end_time=end_time,
+        zone_id=zone_id,
+        domain=domain,
         settings=settings,
-        filter_verified_bots=filter_verified_bots,
         filter_llm_bots=filter_llm_bots,
     )
 
@@ -443,8 +418,9 @@ def ingest_to_sqlite(
     db_path: Optional[Path | str] = None,
     settings: Optional[Settings] = None,
     batch_size: int = DEFAULT_BATCH_SIZE,
-    filter_verified_bots: bool = True,
     filter_llm_bots: bool = True,
+    zone_id: Optional[str] = None,
+    domain: Optional[str] = None,
 ) -> IngestionResult:
     """
     Pull logs from Cloudflare and insert into SQLite.
@@ -460,8 +436,9 @@ def ingest_to_sqlite(
         db_path: Path to SQLite database (uses settings default if None)
         settings: Application settings
         batch_size: Number of records per insert batch
-        filter_verified_bots: Filter for verified bots only
         filter_llm_bots: Filter for LLM bots only (by user-agent)
+        zone_id: Cloudflare zone ID override (optional)
+        domain: Domain label to stamp on ingested records (optional)
 
     Returns:
         IngestionResult with statistics
@@ -500,8 +477,9 @@ def ingest_to_sqlite(
             start_date=start_date,
             end_date=end_date,
             settings=settings,
-            filter_verified_bots=filter_verified_bots,
             filter_llm_bots=filter_llm_bots,
+            zone_id=zone_id,
+            domain=domain,
         ):
             batch.append(record)
 

@@ -13,7 +13,7 @@ from datetime import date, timedelta
 
 import pytest
 
-from tests.integration.conftest import generate_sample_records
+from tests.conftest import generate_sample_records
 
 
 class TestAggregationOperations:

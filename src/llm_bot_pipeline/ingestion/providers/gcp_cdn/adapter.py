@@ -33,11 +33,10 @@ from pathlib import Path
 from typing import Any, Iterator, Optional, Union
 from urllib.parse import urlparse
 
-from llm_bot_pipeline.ingestion.file_utils import open_file_auto_decompress
-
 from ....utils.bot_classifier import classify_bot
 from ...base import IngestionAdapter, IngestionRecord, IngestionSource
 from ...exceptions import ParseError, SourceValidationError
+from ...file_utils import open_file_auto_decompress
 from ...registry import IngestionRegistry
 from ...security import validate_path_safe
 
@@ -489,7 +488,7 @@ class GCPCDNAdapter(IngestionAdapter):
                 path = parsed_url.path or "/"
                 query_string = parsed_url.query or None
             except Exception:
-                # If URL parsing fails, try to extract path directly
+                logger.debug("URL parsing failed for %s", request_url, exc_info=True)
                 path = request_url
 
         # Ensure path starts with /

@@ -9,155 +9,48 @@ import json
 import logging
 import sqlite3
 from contextlib import contextmanager
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
 
-from .base import QueryError, SchemaError, StorageBackend, StorageConnectionError
+# ---------------------------------------------------------------------------
+# Register explicit sqlite3 adapters for date/datetime (Python 3.12+).
+# The built-in default adapters are deprecated; these replacements follow
+# the recipes from the official sqlite3 documentation.
+# ---------------------------------------------------------------------------
+sqlite3.register_adapter(date, lambda val: val.isoformat())
+sqlite3.register_adapter(datetime, lambda val: val.isoformat())
+
+from ..config.constants import VALID_TABLE_NAMES
+from .base import (
+    BackendCapabilities,
+    QueryError,
+    SchemaError,
+    StorageBackend,
+    StorageConnectionError,
+    validate_date_column,
+    validate_table_name,
+)
+from .disk_space import check_disk_space
+from .sqlite_schemas import (
+    CLEAN_TABLE_SCHEMA,
+    DAILY_SUMMARY_SCHEMA,
+    DATA_FRESHNESS_SCHEMA,
+    INDEX_DEFINITIONS,
+    QUERY_FANOUT_SESSIONS_NATURAL_KEY_INDEX,
+    QUERY_FANOUT_SESSIONS_SCHEMA,
+    RAW_TABLE_SCHEMA,
+    SESSION_REFINEMENT_LOG_SCHEMA,
+    SESSION_URL_DETAILS_SCHEMA,
+    SITEMAP_FRESHNESS_SCHEMA,
+    SITEMAP_URLS_SCHEMA,
+    URL_PERFORMANCE_SCHEMA,
+    URL_VOLUME_DECAY_SCHEMA,
+    VIEW_DEFINITIONS,
+    VIEW_NAMES,
+)
 
 logger = logging.getLogger(__name__)
-
-
-# =============================================================================
-# SQLite Schema Definitions
-# =============================================================================
-
-RAW_TABLE_SCHEMA = """
-CREATE TABLE IF NOT EXISTS raw_bot_requests (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    EdgeStartTimestamp TEXT NOT NULL,
-    ClientRequestURI TEXT,
-    ClientRequestHost TEXT,
-    ClientRequestUserAgent TEXT,
-    BotScore INTEGER,
-    BotScoreSrc TEXT,
-    VerifiedBot INTEGER,
-    BotTags TEXT,  -- JSON array stored as string
-    ClientIP TEXT,
-    ClientCountry TEXT,
-    EdgeResponseStatus INTEGER,
-    _ingestion_time TEXT NOT NULL,
-    source_provider TEXT  -- Tracks data provenance (universal, cloudflare, aws_cloudfront)
-)
-"""
-
-CLEAN_TABLE_SCHEMA = """
-CREATE TABLE IF NOT EXISTS bot_requests_daily (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    request_timestamp TEXT NOT NULL,
-    request_date TEXT NOT NULL,
-    request_hour INTEGER NOT NULL,
-    day_of_week TEXT NOT NULL,
-    request_uri TEXT NOT NULL,
-    request_host TEXT NOT NULL,
-    url_path TEXT,
-    url_path_depth INTEGER,
-    user_agent_raw TEXT,
-    bot_name TEXT NOT NULL,
-    bot_provider TEXT NOT NULL,
-    bot_category TEXT NOT NULL,
-    bot_score INTEGER,
-    is_verified_bot INTEGER NOT NULL,
-    crawler_country TEXT,
-    response_status INTEGER NOT NULL,
-    response_status_category TEXT NOT NULL,
-    _processed_at TEXT NOT NULL
-)
-"""
-
-DAILY_SUMMARY_SCHEMA = """
-CREATE TABLE IF NOT EXISTS daily_summary (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    request_date TEXT NOT NULL,
-    bot_provider TEXT NOT NULL,
-    bot_name TEXT NOT NULL,
-    bot_category TEXT NOT NULL,
-    total_requests INTEGER NOT NULL,
-    unique_urls INTEGER NOT NULL,
-    unique_hosts INTEGER NOT NULL,
-    avg_bot_score REAL,
-    successful_requests INTEGER NOT NULL,
-    error_requests INTEGER NOT NULL,
-    redirect_requests INTEGER NOT NULL,
-    _aggregated_at TEXT NOT NULL
-)
-"""
-
-URL_PERFORMANCE_SCHEMA = """
-CREATE TABLE IF NOT EXISTS url_performance (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    request_date TEXT NOT NULL,
-    request_host TEXT NOT NULL,
-    url_path TEXT NOT NULL,
-    total_bot_requests INTEGER NOT NULL,
-    unique_bot_providers INTEGER NOT NULL,
-    unique_bot_names INTEGER NOT NULL,
-    training_hits INTEGER NOT NULL,
-    user_request_hits INTEGER NOT NULL,
-    successful_requests INTEGER NOT NULL,
-    error_requests INTEGER NOT NULL,
-    first_seen TEXT NOT NULL,
-    last_seen TEXT NOT NULL,
-    _aggregated_at TEXT NOT NULL
-)
-"""
-
-DATA_FRESHNESS_SCHEMA = """
-CREATE TABLE IF NOT EXISTS data_freshness (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    table_name TEXT NOT NULL UNIQUE,
-    last_processed_date TEXT NOT NULL,
-    last_updated_at TEXT NOT NULL,
-    rows_processed INTEGER NOT NULL
-)
-"""
-
-QUERY_FANOUT_SESSIONS_SCHEMA = """
-CREATE TABLE IF NOT EXISTS query_fanout_sessions (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    session_id TEXT NOT NULL UNIQUE,
-    session_date TEXT NOT NULL,
-    session_start_time TEXT NOT NULL,
-    session_end_time TEXT NOT NULL,
-    duration_ms INTEGER NOT NULL,
-    bot_provider TEXT NOT NULL,
-    bot_name TEXT,
-    request_count INTEGER NOT NULL,
-    unique_urls INTEGER NOT NULL,
-    mean_cosine_similarity REAL,
-    min_cosine_similarity REAL,
-    max_cosine_similarity REAL,
-    confidence_level TEXT NOT NULL,
-    fanout_session_name TEXT,
-    url_list TEXT NOT NULL,
-    window_ms REAL NOT NULL,
-    _created_at TEXT NOT NULL DEFAULT (datetime('now')),
-    CONSTRAINT valid_confidence CHECK (confidence_level IN ('high', 'medium', 'low'))
-)
-"""
-
-# Index definitions for query performance
-INDEX_DEFINITIONS = [
-    # Raw table indexes
-    "CREATE INDEX IF NOT EXISTS idx_raw_timestamp ON raw_bot_requests(EdgeStartTimestamp)",
-    "CREATE INDEX IF NOT EXISTS idx_raw_host ON raw_bot_requests(ClientRequestHost)",
-    # Clean table indexes (matching SQLite clustering)
-    "CREATE INDEX IF NOT EXISTS idx_clean_date ON bot_requests_daily(request_date)",
-    "CREATE INDEX IF NOT EXISTS idx_clean_provider ON bot_requests_daily(bot_provider)",
-    "CREATE INDEX IF NOT EXISTS idx_clean_category ON bot_requests_daily(bot_category)",
-    "CREATE INDEX IF NOT EXISTS idx_clean_host ON bot_requests_daily(request_host)",
-    # Summary table indexes
-    "CREATE INDEX IF NOT EXISTS idx_summary_date ON daily_summary(request_date)",
-    "CREATE INDEX IF NOT EXISTS idx_summary_provider ON daily_summary(bot_provider)",
-    # URL performance indexes
-    "CREATE INDEX IF NOT EXISTS idx_url_date ON url_performance(request_date)",
-    "CREATE INDEX IF NOT EXISTS idx_url_host ON url_performance(request_host)",
-    # Query fan-out sessions indexes
-    "CREATE INDEX IF NOT EXISTS idx_sessions_date ON query_fanout_sessions(session_date)",
-    "CREATE INDEX IF NOT EXISTS idx_sessions_provider ON query_fanout_sessions(bot_provider)",
-    "CREATE INDEX IF NOT EXISTS idx_sessions_confidence ON query_fanout_sessions(confidence_level)",
-    "CREATE INDEX IF NOT EXISTS idx_sessions_request_count ON query_fanout_sessions(request_count)",
-]
 
 
 # =============================================================================
@@ -269,58 +162,7 @@ def from_sqlite_timestamp(value: Any) -> Optional[datetime]:
 # Validation Helpers
 # =============================================================================
 
-# Valid table names in our schema
-VALID_TABLES = frozenset(
-    [
-        "raw_bot_requests",
-        "bot_requests_daily",
-        "daily_summary",
-        "url_performance",
-        "data_freshness",
-        "query_fanout_sessions",
-    ]
-)
-
-# Valid column names for date filtering
-VALID_DATE_COLUMNS = frozenset(
-    [
-        "EdgeStartTimestamp",
-        "request_date",
-        "request_timestamp",
-        "last_processed_date",
-        "first_seen",
-        "last_seen",
-        "_ingestion_time",
-        "_processed_at",
-        "_aggregated_at",
-        "session_date",
-        "session_start_time",
-        "session_end_time",
-        "_created_at",
-    ]
-)
-
-
-def _validate_identifier(value: str, valid_set: frozenset, name: str) -> str:
-    """
-    Validate an identifier against a whitelist to prevent SQL injection.
-
-    Args:
-        value: The identifier to validate
-        valid_set: Set of valid identifiers
-        name: Human-readable name for error messages
-
-    Returns:
-        The validated identifier
-
-    Raises:
-        ValueError: If identifier is not in the valid set
-    """
-    if value not in valid_set:
-        raise ValueError(
-            f"Invalid {name}: '{value}'. Must be one of: {sorted(valid_set)}"
-        )
-    return value
+VALID_TABLES = VALID_TABLE_NAMES
 
 
 # =============================================================================
@@ -342,6 +184,8 @@ class SQLiteBackend(StorageBackend):
         *,
         check_same_thread: bool = False,
         timeout: float = 30.0,
+        disk_space_threshold_mb: int = 500,
+        vacuum_threshold: int = 10_000,
     ):
         """
         Initialize SQLite backend.
@@ -350,11 +194,16 @@ class SQLiteBackend(StorageBackend):
             db_path: Path to SQLite database file
             check_same_thread: SQLite check_same_thread parameter
             timeout: Connection timeout in seconds
+            disk_space_threshold_mb: Minimum free MB required before writes
+            vacuum_threshold: Run VACUUM after deletes exceed this row count (0=disabled)
         """
         self.db_path = Path(db_path)
         self._check_same_thread = check_same_thread
         self._timeout = timeout
+        self._disk_space_threshold_mb = disk_space_threshold_mb
+        self._vacuum_threshold = vacuum_threshold
         self._connection: Optional[sqlite3.Connection] = None
+        self._deleted_since_vacuum = 0
 
         # Ensure parent directory exists
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -363,6 +212,17 @@ class SQLiteBackend(StorageBackend):
     def backend_type(self) -> str:
         """Return backend type identifier."""
         return "sqlite"
+
+    @property
+    def capabilities(self) -> BackendCapabilities:
+        return BackendCapabilities(
+            supports_sql=True,
+            supports_streaming=False,
+            supports_partitioning=False,
+            supports_transactions=True,
+            supports_upsert=True,
+            parameter_style="named",
+        )
 
     def _get_connection(self) -> sqlite3.Connection:
         """Get or create database connection."""
@@ -397,15 +257,73 @@ class SQLiteBackend(StorageBackend):
         finally:
             cursor.close()
 
+    # ------------------------------------------------------------------
+    # Schema migration constants for v1 → v2 auto-upgrade
+    # ------------------------------------------------------------------
+    _V2_MIGRATIONS: list[tuple[str, str, str]] = [
+        ("raw_bot_requests", "domain", "TEXT"),
+        ("raw_bot_requests", "RayID", "TEXT"),
+        ("bot_requests_daily", "domain", "TEXT"),
+        ("daily_summary", "domain", "TEXT"),
+        ("url_performance", "domain", "TEXT"),
+        ("query_fanout_sessions", "domain", "TEXT"),
+        ("query_fanout_sessions", "splitting_strategy", "TEXT"),
+        ("query_fanout_sessions", "parent_session_id", "TEXT"),
+        ("query_fanout_sessions", "was_refined", "INTEGER NOT NULL DEFAULT 0"),
+        ("query_fanout_sessions", "refinement_reason", "TEXT"),
+        ("query_fanout_sessions", "pre_refinement_mibcs", "REAL"),
+    ]
+
+    def _migrate_schema(self, cursor: sqlite3.Cursor) -> None:
+        """
+        Auto-migrate v1 schema to v2 by adding missing columns.
+
+        Idempotent: checks PRAGMA table_info before each ALTER TABLE.
+        Only runs when the v1 sentinel (missing domain on raw_bot_requests)
+        is detected on an existing database.
+        """
+
+        def _column_exists(table: str, column: str) -> bool:
+            cursor.execute(f"PRAGMA table_info({table})")
+            return any(row[1] == column for row in cursor.fetchall())
+
+        def _table_exists(table: str) -> bool:
+            cursor.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
+                (table,),
+            )
+            return cursor.fetchone() is not None
+
+        # Sentinel: if raw_bot_requests exists but has no domain column → v1
+        if not _table_exists("raw_bot_requests"):
+            return
+        if _column_exists("raw_bot_requests", "domain"):
+            return
+
+        logger.info("Auto-migrating SQLite schema from v1 to v2...")
+        for table, column, column_def in self._V2_MIGRATIONS:
+            if not _table_exists(table):
+                continue
+            if _column_exists(table, column):
+                continue
+            cursor.execute(f"ALTER TABLE {table} ADD COLUMN {column} {column_def}")
+            logger.debug("Added %s.%s", table, column)
+        logger.info("Schema auto-migration complete")
+
     def initialize(self) -> None:
         """
-        Initialize database with all required tables and indexes.
+        Initialize database with all required tables, indexes, and views.
 
-        Safe to call multiple times - uses IF NOT EXISTS.
+        Safe to call multiple times — uses IF NOT EXISTS. Automatically
+        migrates v1 databases by adding missing columns before creating
+        new tables and indexes.
         """
         logger.info(f"Initializing SQLite database: {self.db_path}")
 
         with self._cursor() as cursor:
+            # Phase 1: Migrate existing tables (adds missing v2 columns)
+            self._migrate_schema(cursor)
+
             # Create tables
             cursor.execute(RAW_TABLE_SCHEMA)
             cursor.execute(CLEAN_TABLE_SCHEMA)
@@ -413,10 +331,22 @@ class SQLiteBackend(StorageBackend):
             cursor.execute(URL_PERFORMANCE_SCHEMA)
             cursor.execute(DATA_FRESHNESS_SCHEMA)
             cursor.execute(QUERY_FANOUT_SESSIONS_SCHEMA)
+            cursor.execute(QUERY_FANOUT_SESSIONS_NATURAL_KEY_INDEX)
+            cursor.execute(SESSION_URL_DETAILS_SCHEMA)
+            cursor.execute(SESSION_REFINEMENT_LOG_SCHEMA)
+            cursor.execute(SITEMAP_URLS_SCHEMA)
+            cursor.execute(SITEMAP_FRESHNESS_SCHEMA)
+            cursor.execute(URL_VOLUME_DECAY_SCHEMA)
 
             # Create indexes
             for index_sql in INDEX_DEFINITIONS:
                 cursor.execute(index_sql)
+
+            # Drop and recreate reporting views (ensures schema changes propagate)
+            for view_name in VIEW_NAMES:
+                cursor.execute(f"DROP VIEW IF EXISTS {view_name}")
+            for view_sql in VIEW_DEFINITIONS:
+                cursor.execute(view_sql)
 
         logger.info("SQLite database initialized successfully")
 
@@ -426,6 +356,10 @@ class SQLiteBackend(StorageBackend):
             self._connection.close()
             self._connection = None
             logger.debug("SQLite connection closed")
+
+    def _check_disk_space(self) -> None:
+        """Validate sufficient disk space before write operations."""
+        check_disk_space(self.db_path, self._disk_space_threshold_mb)
 
     def insert_raw_records(self, records: list[dict]) -> int:
         """
@@ -440,23 +374,25 @@ class SQLiteBackend(StorageBackend):
         if not records:
             return 0
 
+        self._check_disk_space()
+
         sql = """
             INSERT INTO raw_bot_requests (
                 EdgeStartTimestamp, ClientRequestURI, ClientRequestHost,
                 ClientRequestUserAgent, BotScore, BotScoreSrc, VerifiedBot,
                 BotTags, ClientIP, ClientCountry, EdgeResponseStatus,
-                _ingestion_time, source_provider
+                RayID, _ingestion_time, source_provider, domain
             ) VALUES (
                 :EdgeStartTimestamp, :ClientRequestURI, :ClientRequestHost,
                 :ClientRequestUserAgent, :BotScore, :BotScoreSrc, :VerifiedBot,
                 :BotTags, :ClientIP, :ClientCountry, :EdgeResponseStatus,
-                :_ingestion_time, :source_provider
+                :RayID, :_ingestion_time, :source_provider, :domain
             )
         """
 
         # Convert records for SQLite
         converted_records = []
-        now = datetime.now().astimezone().isoformat()
+        now = datetime.now(timezone.utc).isoformat()
 
         for record in records:
             converted = {
@@ -473,8 +409,10 @@ class SQLiteBackend(StorageBackend):
                 "ClientIP": record.get("ClientIP"),
                 "ClientCountry": record.get("ClientCountry"),
                 "EdgeResponseStatus": record.get("EdgeResponseStatus"),
+                "RayID": record.get("RayID"),
                 "_ingestion_time": record.get("_ingestion_time", now),
                 "source_provider": record.get("source_provider"),
+                "domain": record.get("domain"),
             }
             converted_records.append(converted)
 
@@ -521,7 +459,20 @@ class SQLiteBackend(StorageBackend):
         """
         with self._cursor() as cursor:
             cursor.execute(sql, params or {})
-            return cursor.rowcount
+            rowcount = cursor.rowcount
+
+        # Track deletes and vacuum when threshold exceeded
+        if (
+            self._vacuum_threshold > 0
+            and sql.strip().upper().startswith("DELETE")
+            and rowcount > 0
+        ):
+            self._deleted_since_vacuum += rowcount
+            if self._deleted_since_vacuum >= self._vacuum_threshold:
+                self.vacuum()
+                self._deleted_since_vacuum = 0
+
+        return rowcount
 
     def table_exists(self, table_name: str) -> bool:
         """Check if a table exists."""
@@ -534,10 +485,10 @@ class SQLiteBackend(StorageBackend):
 
     def get_table_row_count(self, table_name: str) -> int:
         """Get total row count for a table."""
+        validate_table_name(table_name)
         if not self.table_exists(table_name):
             raise SchemaError(f"Table '{table_name}' does not exist")
 
-        # Use f-string here - table_name is validated by table_exists
         sql = f"SELECT COUNT(*) as count FROM {table_name}"
         result = self.query(sql)
         return result[0]["count"] if result else 0
@@ -550,13 +501,11 @@ class SQLiteBackend(StorageBackend):
         end_date: date,
     ) -> int:
         """Get row count for a specific date range."""
+        validate_table_name(table_name)
+        validate_date_column(date_column)
         if not self.table_exists(table_name):
             raise SchemaError(f"Table '{table_name}' does not exist")
 
-        # Validate date_column to prevent SQL injection
-        _validate_identifier(date_column, VALID_DATE_COLUMNS, "date column")
-
-        # SQLite uses TEXT for dates, so comparison works with ISO format
         sql = f"""
             SELECT COUNT(*) as count
             FROM {table_name}
@@ -586,16 +535,18 @@ class SQLiteBackend(StorageBackend):
         if not records:
             return 0
 
+        self._check_disk_space()
+
         sql = """
             INSERT INTO bot_requests_daily (
                 request_timestamp, request_date, request_hour, day_of_week,
-                request_uri, request_host, url_path, url_path_depth,
+                request_uri, request_host, domain, url_path, url_path_depth,
                 user_agent_raw, bot_name, bot_provider, bot_category,
                 bot_score, is_verified_bot, crawler_country,
                 response_status, response_status_category, _processed_at
             ) VALUES (
                 :request_timestamp, :request_date, :request_hour, :day_of_week,
-                :request_uri, :request_host, :url_path, :url_path_depth,
+                :request_uri, :request_host, :domain, :url_path, :url_path_depth,
                 :user_agent_raw, :bot_name, :bot_provider, :bot_category,
                 :bot_score, :is_verified_bot, :crawler_country,
                 :response_status, :response_status_category, :_processed_at
@@ -603,7 +554,7 @@ class SQLiteBackend(StorageBackend):
         """
 
         converted_records = []
-        now = datetime.now().astimezone().isoformat()
+        now = datetime.now(timezone.utc).isoformat()
 
         for record in records:
             converted = {
@@ -615,6 +566,7 @@ class SQLiteBackend(StorageBackend):
                 "day_of_week": record.get("day_of_week"),
                 "request_uri": record.get("request_uri"),
                 "request_host": record.get("request_host"),
+                "domain": record.get("domain"),
                 "url_path": record.get("url_path"),
                 "url_path_depth": record.get("url_path_depth"),
                 "user_agent_raw": record.get("user_agent_raw"),
@@ -635,6 +587,34 @@ class SQLiteBackend(StorageBackend):
             # executemany may not set rowcount correctly; use len instead
             return len(converted_records)
 
+    def insert_sitemap_urls(self, entries: list[dict]) -> int:
+        """Insert or replace sitemap URL entries into sitemap_urls table.
+
+        Uses INSERT OR REPLACE so re-fetching a sitemap updates lastmod values.
+
+        Args:
+            entries: List of dicts with keys: url, url_path, lastmod,
+                     lastmod_month, sitemap_source
+
+        Returns:
+            Number of entries upserted
+        """
+        if not entries:
+            return 0
+
+        self._check_disk_space()
+
+        sql = """
+            INSERT OR REPLACE INTO sitemap_urls
+                (url, url_path, lastmod, lastmod_month, sitemap_source, _fetched_at)
+            VALUES
+                (:url, :url_path, :lastmod, :lastmod_month, :sitemap_source, datetime('now'))
+        """
+
+        with self._cursor() as cursor:
+            cursor.executemany(sql, entries)
+            return len(entries)
+
     def delete_date_range(
         self,
         table_name: str,
@@ -654,11 +634,10 @@ class SQLiteBackend(StorageBackend):
         Returns:
             Number of rows deleted
         """
+        validate_table_name(table_name)
+        validate_date_column(date_column)
         if not self.table_exists(table_name):
             raise SchemaError(f"Table '{table_name}' does not exist")
-
-        # Validate date_column to prevent SQL injection
-        _validate_identifier(date_column, VALID_DATE_COLUMNS, "date column")
 
         sql = f"""
             DELETE FROM {table_name}
@@ -678,7 +657,7 @@ class SQLiteBackend(StorageBackend):
         """
         conn = self._get_connection()
         conn.execute("VACUUM")
-        logger.info("Database vacuumed")
+        logger.info("SQLite VACUUM completed to reclaim disk space")
 
     def get_schema_info(self) -> dict[str, list[dict]]:
         """

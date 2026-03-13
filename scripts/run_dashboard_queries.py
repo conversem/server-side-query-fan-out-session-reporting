@@ -23,17 +23,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 from llm_bot_pipeline.pipeline import setup_logging
 from llm_bot_pipeline.reporting import LocalDashboardQueries
 from llm_bot_pipeline.storage import get_backend
-
-
-def parse_date(date_str: str) -> date:
-    """Parse date string in YYYY-MM-DD format."""
-    try:
-        return datetime.strptime(date_str, "%Y-%m-%d").date()
-    except ValueError:
-        raise argparse.ArgumentTypeError(
-            f"Invalid date format: {date_str}. Use YYYY-MM-DD"
-        )
-
+from llm_bot_pipeline.utils.date_utils import parse_date
 
 AVAILABLE_KPIS = [
     "requests_per_day",
@@ -65,9 +55,15 @@ Examples:
     )
 
     parser.add_argument(
+        "--backend",
+        choices=["sqlite", "bigquery"],
+        default=None,
+        help="Storage backend (default: from settings)",
+    )
+    parser.add_argument(
         "--db-path",
         type=Path,
-        help="Path to SQLite database (default: data/llm-bot-logs.db)",
+        help="Path to SQLite database (default: from settings)",
     )
 
     parser.add_argument(
@@ -102,20 +98,28 @@ Examples:
         action="store_true",
         help="Enable verbose logging",
     )
+    parser.add_argument(
+        "--json-logs",
+        action="store_true",
+        help="Use structured JSON logging (cloud environments)",
+    )
 
     args = parser.parse_args()
 
     if not args.all and not args.kpi:
         parser.error("Must specify --all or at least one --kpi")
 
-    setup_logging(level=logging.DEBUG if args.verbose else logging.INFO)
+    setup_logging(
+        level=logging.DEBUG if args.verbose else logging.INFO,
+        json_logs=args.json_logs,
+    )
     logger = logging.getLogger(__name__)
 
     # Initialize backend
     kwargs = {}
     if args.db_path:
         kwargs["db_path"] = args.db_path
-    backend = get_backend("sqlite", **kwargs)
+    backend = get_backend(args.backend, **kwargs)
     backend.initialize()
 
     kpis_to_run = AVAILABLE_KPIS if args.all else args.kpi

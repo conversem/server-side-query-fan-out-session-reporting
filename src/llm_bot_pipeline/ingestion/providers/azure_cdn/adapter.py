@@ -458,8 +458,7 @@ class AzureCDNAdapter(IngestionAdapter):
                 if not query_string and parsed.query:
                     query_string = parsed.query
             except Exception:
-                # If URL parsing fails, use path as-is
-                pass
+                logger.debug("URL parsing failed, using path as-is", exc_info=True)
         elif path and "?" in path and not query_string:
             # Path contains query string but wasn't detected as full URL
             parts = path.split("?", 1)

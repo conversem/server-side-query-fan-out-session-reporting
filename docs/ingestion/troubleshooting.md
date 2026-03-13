@@ -130,8 +130,9 @@ head -n 5 logs.csv
 
 **Example**:
 ```bash
-# Check for other processes
-lsof data/llm-bot-logs.db
+# Check for other processes (use actual database path - see Architecture: Database Paths)
+lsof data/example.db      # multi-domain
+lsof data/llm-bot-logs.db        # single-domain default
 
 # Use different database
 python scripts/ingest_logs.py --db-path /tmp/test.db --input logs.csv
@@ -420,12 +421,17 @@ python scripts/ingest_logs.py --input logs.csv --verbose
 
 ### Check Database
 
+> **Note**: In multi-domain production setups, databases are named per domain
+> (e.g. `data/example.db`), not `data/llm-bot-logs.db`.
+> See [Architecture: Database Paths](../architecture.md#database-paths) for details.
+
 ```bash
-# SQLite
+# Single-domain default
 sqlite3 data/llm-bot-logs.db "SELECT COUNT(*) FROM raw_bot_requests;"
 
-# Check recent records
-sqlite3 data/llm-bot-logs.db "SELECT * FROM raw_bot_requests LIMIT 10;"
+# Multi-domain - use the domain-specific database
+sqlite3 data/example.db "SELECT COUNT(*) FROM raw_bot_requests;"
+sqlite3 data/example.db "SELECT * FROM raw_bot_requests LIMIT 10;"
 ```
 
 ## Getting Help

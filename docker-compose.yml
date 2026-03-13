@@ -1,6 +1,7 @@
 # Docker Compose for LLM Bot Traffic Analysis Pipeline
 # Usage:
 #   docker compose run --rm app bash                    # Interactive shell
+#   docker compose run --rm app gcloud init             # Initialize gcloud
 #   docker compose run --rm app python scripts/ingest_logs.py --help
 
 services:
@@ -13,10 +14,20 @@ services:
       - .:/app
       # Persist data between runs
       - ./data:/app/data
+      # Persist gcloud configuration between runs
+      - gcloud-config:/home/appuser/.config/gcloud
+      # Mount credentials directory (for generated keys)
+      - ./credentials:/app/credentials
     environment:
       # Cloudflare API (optional, for API-based ingestion)
       - CLOUDFLARE_API_TOKEN=${CLOUDFLARE_API_TOKEN:-}
       - CLOUDFLARE_ZONE_ID=${CLOUDFLARE_ZONE_ID:-}
+      # Pass through GCP if set
+      - GCP_PROJECT_ID=${GCP_PROJECT_ID:-}
     stdin_open: true
     tty: true
     working_dir: /app
+
+volumes:
+  gcloud-config:
+    # Persists gcloud authentication between container runs

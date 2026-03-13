@@ -52,7 +52,9 @@ python scripts/ingest_logs.py [OPTIONS]
 ### Database Options
 
 - **`--db-path PATH`** - Path to SQLite database file
-  - Default: `data/llm-bot-logs.db`
+  - Default: `data/llm-bot-logs.db` (single-domain mode)
+  - In multi-domain production setups, databases are named per domain
+    (e.g. `data/example.db`). See [Architecture: Database Paths](../architecture.md#database-paths).
 
 ### Security Options
 

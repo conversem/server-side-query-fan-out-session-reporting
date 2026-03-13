@@ -12,6 +12,7 @@ RAW_BOT_REQUESTS_COLUMNS = {
     "EdgeStartTimestamp": "TIMESTAMP",
     "ClientRequestURI": "TEXT",
     "ClientRequestHost": "TEXT",
+    "domain": "TEXT",
     "ClientRequestUserAgent": "TEXT",
     "BotScore": "INTEGER",
     "BotScoreSrc": "TEXT",

@@ -10,9 +10,10 @@ Provides robust error handling with:
 
 import logging
 import random
+import threading
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 from functools import wraps
 from typing import Any, Callable, Optional, TypeVar
@@ -123,51 +124,55 @@ class CircuitBreaker:
         self.failure_threshold = failure_threshold
         self.recovery_timeout = timedelta(seconds=recovery_timeout_seconds)
         self.success_threshold = success_threshold
+        self._lock = threading.Lock()
         self.state = CircuitBreakerState()
 
     @property
     def is_open(self) -> bool:
         """Check if circuit is open (blocking calls)."""
-        if self.state.state == "open":
-            # Check if recovery timeout has passed
-            if self.state.last_failure_time:
-                elapsed = datetime.utcnow() - self.state.last_failure_time
-                if elapsed >= self.recovery_timeout:
-                    self.state.state = "half-open"
-                    self.state.success_count_in_half_open = 0
-                    logger.info("Circuit breaker moving to half-open state")
-                    return False
-            return True
-        return False
+        with self._lock:
+            if self.state.state == "open":
+                if self.state.last_failure_time:
+                    elapsed = datetime.now(timezone.utc) - self.state.last_failure_time
+                    if elapsed >= self.recovery_timeout:
+                        self.state.state = "half-open"
+                        self.state.success_count_in_half_open = 0
+                        logger.info("Circuit breaker moving to half-open state")
+                        return False
+                return True
+            return False
 
     def record_success(self) -> None:
         """Record a successful operation."""
-        if self.state.state == "half-open":
-            self.state.success_count_in_half_open += 1
-            if self.state.success_count_in_half_open >= self.success_threshold:
-                self.state.state = "closed"
+        with self._lock:
+            if self.state.state == "half-open":
+                self.state.success_count_in_half_open += 1
+                if self.state.success_count_in_half_open >= self.success_threshold:
+                    self.state.state = "closed"
+                    self.state.failure_count = 0
+                    logger.info("Circuit breaker closed after recovery")
+            elif self.state.state == "closed":
                 self.state.failure_count = 0
-                logger.info("Circuit breaker closed after recovery")
-        elif self.state.state == "closed":
-            self.state.failure_count = 0
 
     def record_failure(self) -> None:
         """Record a failed operation."""
-        self.state.failure_count += 1
-        self.state.last_failure_time = datetime.utcnow()
+        with self._lock:
+            self.state.failure_count += 1
+            self.state.last_failure_time = datetime.now(timezone.utc)
 
-        if self.state.state == "half-open":
-            self.state.state = "open"
-            logger.warning("Circuit breaker opened again after half-open failure")
-        elif self.state.failure_count >= self.failure_threshold:
-            self.state.state = "open"
-            logger.warning(
-                f"Circuit breaker opened after {self.state.failure_count} failures"
-            )
+            if self.state.state == "half-open":
+                self.state.state = "open"
+                logger.warning("Circuit breaker opened again after half-open failure")
+            elif self.state.failure_count >= self.failure_threshold:
+                self.state.state = "open"
+                logger.warning(
+                    f"Circuit breaker opened after {self.state.failure_count} failures"
+                )
 
     def reset(self) -> None:
         """Reset circuit breaker to initial state."""
-        self.state = CircuitBreakerState()
+        with self._lock:
+            self.state = CircuitBreakerState()
 
     def get_state(self) -> dict:
         """Get current state as dictionary."""

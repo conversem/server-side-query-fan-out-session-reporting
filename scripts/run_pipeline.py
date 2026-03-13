@@ -21,6 +21,7 @@ Usage:
 
 import argparse
 import logging
+import signal
 import sys
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -31,19 +32,27 @@ import pandas as pd
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from llm_bot_pipeline.config import OPTIMAL_WINDOW_MS
-from llm_bot_pipeline.pipeline import LocalPipeline, setup_logging
+from llm_bot_pipeline.pipeline import setup_logging
+from llm_bot_pipeline.pipeline.router import (
+    get_pipeline_status,
+    processing_mode_to_backend_type,
+)
+from llm_bot_pipeline.pipeline.router import run_pipeline as router_run_pipeline
 from llm_bot_pipeline.reporting import SessionAggregator
+from llm_bot_pipeline.sitemap import run_sitemap_pipeline
 from llm_bot_pipeline.storage import get_backend
+from llm_bot_pipeline.utils.date_utils import parse_date
+
+# -----------------------------------------------------------------------------
+# Graceful shutdown (Cloud Run sends SIGTERM)
+# -----------------------------------------------------------------------------
 
 
-def parse_date(date_str: str) -> date:
-    """Parse date string in YYYY-MM-DD format."""
-    try:
-        return datetime.strptime(date_str, "%Y-%m-%d").date()
-    except ValueError:
-        raise argparse.ArgumentTypeError(
-            f"Invalid date format: {date_str}. Use YYYY-MM-DD"
-        )
+def _handle_sigterm(signum, frame):
+    raise SystemExit(0)
+
+
+signal.signal(signal.SIGTERM, _handle_sigterm)
 
 
 def run_session_aggregation(
@@ -51,6 +60,7 @@ def run_session_aggregation(
     start_date: date = None,
     end_date: date = None,
     dry_run: bool = False,
+    backend_type: str = None,
 ) -> dict:
     """
     Run session aggregation on processed data.
@@ -63,6 +73,7 @@ def run_session_aggregation(
         start_date: Start date for data to process
         end_date: End date for data to process
         dry_run: If True, skip actual session creation
+        backend_type: Storage backend type (default: from settings)
 
     Returns:
         Dictionary with session aggregation metrics
@@ -90,7 +101,7 @@ def run_session_aggregation(
     kwargs = {}
     if db_path:
         kwargs["db_path"] = db_path
-    backend = get_backend("sqlite", **kwargs)
+    backend = get_backend(backend_type, **kwargs)
     backend.initialize()
 
     try:
@@ -172,6 +183,40 @@ def run_session_aggregation(
     return result
 
 
+def _run_sitemap_stage(args, backend_type: str) -> dict | None:
+    """Run the sitemap fetch + aggregation stage if not skipped."""
+    if args.skip_sitemap:
+        print()
+        print("⏭️  Sitemap aggregation skipped (--skip-sitemap)")
+        return None
+
+    print()
+    print("🗺️  Sitemap Fetch & Aggregation")
+    print("=" * 50)
+
+    kwargs = {}
+    if args.db_path:
+        kwargs["db_path"] = args.db_path
+    backend = get_backend(backend_type, **kwargs)
+    backend.initialize()
+
+    try:
+        result = run_sitemap_pipeline(backend=backend)
+
+        if result.get("skipped"):
+            print("  No sitemap URLs configured — skipped")
+            return result
+
+        print(f"  URLs stored: {result['urls_stored']:,}")
+        for agg in result.get("aggregation_results", []):
+            print(f"  {agg.table_name}: {agg.rows_inserted:,} rows")
+        print(f"  Success: {'✅' if result['success'] else '❌'}")
+
+        return result
+    finally:
+        backend.close()
+
+
 def main():
     """Main entry point."""
     parser = argparse.ArgumentParser(
@@ -190,12 +235,17 @@ Examples:
         """,
     )
 
-    # Backend selection (SQLite only in public version)
+    parser.add_argument(
+        "--processing-mode",
+        choices=["local_sqlite", "local_bq_buffered", "local_bq_streaming", "gcp_bq"],
+        default=None,
+        help="Processing mode (default: from settings)",
+    )
     parser.add_argument(
         "--backend",
-        choices=["sqlite"],
-        default="sqlite",
-        help="Storage backend to use (default: sqlite)",
+        choices=["sqlite", "bigquery"],
+        default=None,
+        help="(Deprecated) Alias: --backend sqlite → local_sqlite, bigquery → gcp_bq",
     )
 
     parser.add_argument(
@@ -251,6 +301,11 @@ Examples:
         action="store_true",
         help="Skip session aggregation step after ETL",
     )
+    parser.add_argument(
+        "--skip-sitemap",
+        action="store_true",
+        help="Skip sitemap fetch and aggregation",
+    )
 
     # Optional
     parser.add_argument(
@@ -258,6 +313,11 @@ Examples:
         "-v",
         action="store_true",
         help="Enable verbose logging",
+    )
+    parser.add_argument(
+        "--json-logs",
+        action="store_true",
+        help="Use structured JSON logging (cloud environments)",
     )
     parser.add_argument(
         "--status",
@@ -271,27 +331,38 @@ Examples:
     if args.batch_days < 1:
         parser.error("--batch-days must be >= 1")
 
-    # Setup logging
-    setup_logging(level=logging.DEBUG if args.verbose else logging.INFO)
-    logger = logging.getLogger(__name__)
+    # Resolve processing_mode: --processing-mode > --backend (backward compat) > settings
+    if args.processing_mode:
+        processing_mode = args.processing_mode
+    elif args.backend:
+        processing_mode = "local_sqlite" if args.backend == "sqlite" else "gcp_bq"
+    else:
+        from llm_bot_pipeline.config.settings import get_settings
 
-    # Initialize pipeline
-    try:
-        pipeline = LocalPipeline(
-            backend_type="sqlite",
-            db_path=args.db_path,
-        )
-        pipeline.initialize()
-    except Exception as e:
-        logger.error(f"Failed to initialize pipeline: {e}")
-        return 1
+        processing_mode = get_settings().processing_mode
+    args._resolved_processing_mode = processing_mode
+    backend_type = processing_mode_to_backend_type(processing_mode)
+
+    # Setup logging
+    setup_logging(
+        level=logging.DEBUG if args.verbose else logging.INFO,
+        json_logs=args.json_logs,
+    )
+    logger = logging.getLogger(__name__)
 
     # Show status and exit
     if args.status:
-        status = pipeline.get_pipeline_status()
+        try:
+            status = get_pipeline_status(
+                mode=processing_mode,
+                db_path=args.db_path,
+            )
+        except Exception as e:
+            logger.error(f"Failed to get pipeline status: {e}")
+            return 1
         print("\n📊 Pipeline Status")
         print("=" * 50)
-        print(f"  Backend: sqlite")
+        print(f"  Processing mode: {processing_mode}")
         for key, value in status.items():
             print(f"  {key}: {value}")
         print()
@@ -318,7 +389,7 @@ Examples:
     print()
     print("🚀 LLM Bot Traffic ETL Pipeline")
     print("=" * 50)
-    print(f"  Backend: sqlite")
+    print(f"  Processing mode: {processing_mode}")
     if args.db_path:
         print(f"  Database: {args.db_path}")
     print(f"  Date range: {start_date} to {end_date}")
@@ -331,11 +402,13 @@ Examples:
         if args.backfill:
             # Backfill mode - runs as single batch for SQLite
             logger.info("Backfill mode runs as single batch for SQLite backend")
-            result = pipeline.run(
+            result = router_run_pipeline(
                 start_date=start_date,
                 end_date=end_date,
-                mode=args.mode,
+                processing_mode=processing_mode,
                 dry_run=args.dry_run,
+                db_path=args.db_path,
+                mode=args.mode,
             )
             results = [result]
 
@@ -363,6 +436,7 @@ Examples:
                     start_date=start_date,
                     end_date=end_date,
                     dry_run=args.dry_run,
+                    backend_type=backend_type,
                 )
 
                 print(f"  Success: {'✅' if session_result['success'] else '❌'}")
@@ -383,19 +457,27 @@ Examples:
                 print()
                 print("⏭️  Session aggregation skipped (--skip-sessions)")
 
+            # Sitemap stage
+            sitemap_result = _run_sitemap_stage(args, backend_type)
+
             # Determine overall success
             etl_success = successful == len(results)
             session_success = session_result is None or session_result["success"]
+            sitemap_success = sitemap_result is None or sitemap_result.get(
+                "success", True
+            )
 
-            return 0 if (etl_success and session_success) else 1
+            return 0 if (etl_success and session_success and sitemap_success) else 1
 
         else:
             # Single run
-            result = pipeline.run(
+            result = router_run_pipeline(
                 start_date=start_date,
                 end_date=end_date,
-                mode=args.mode,
+                processing_mode=processing_mode,
                 dry_run=args.dry_run,
+                db_path=args.db_path,
+                mode=args.mode,
             )
 
             # Print ETL summary
@@ -427,6 +509,7 @@ Examples:
                     start_date=start_date,
                     end_date=end_date,
                     dry_run=args.dry_run,
+                    backend_type=backend_type,
                 )
 
                 print(f"  Success: {'✅' if session_result['success'] else '❌'}")
@@ -447,17 +530,25 @@ Examples:
                 print()
                 print("⏭️  Session aggregation skipped (--skip-sessions)")
 
+            # Sitemap stage
+            sitemap_result = _run_sitemap_stage(args, backend_type)
+
             # Determine overall success
             pipeline_success = result.success
             if session_result and not session_result["success"]:
                 pipeline_success = False
+            if sitemap_result and not sitemap_result.get("success", True):
+                pipeline_success = False
 
             return 0 if pipeline_success else 1
 
-    finally:
-        # Cleanup: close pipeline
-        if hasattr(pipeline, "close"):
-            pipeline.close()
+    except KeyboardInterrupt:
+        logger.info("Interrupted by user")
+        return 130
+
+    except Exception as e:
+        logger.exception(f"Pipeline failed: {e}")
+        return 1
 
 
 if __name__ == "__main__":

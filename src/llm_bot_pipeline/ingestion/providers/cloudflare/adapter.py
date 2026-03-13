@@ -127,7 +127,6 @@ class CloudflareAdapter(IngestionAdapter):
             **kwargs: Additional options:
                 - strict_validation: If True, reject invalid records (default: False)
                 - zone_id: Cloudflare zone ID (for API source, uses settings if None)
-                - filter_verified_bots: If True, only return verified bot traffic (API only)
 
         Yields:
             IngestionRecord objects in universal format
@@ -264,9 +263,7 @@ class CloudflareAdapter(IngestionAdapter):
         if source.path_or_uri and source.path_or_uri.startswith("api://"):
             zone_id = source.path_or_uri.replace("api://", "")
 
-        # Get filter options
-        filter_verified_bots = kwargs.get("filter_verified_bots", True)
-        filter_llm_bots = filter_bots  # Use filter_bots parameter for LLM bot filtering
+        filter_llm_bots = filter_bots
 
         # Require explicit time range for API sources (no defaults)
         # This prevents accidental large data pulls
@@ -282,7 +279,6 @@ class CloudflareAdapter(IngestionAdapter):
                 start_time=start_time,
                 end_time=end_time,
                 zone_id=zone_id,
-                filter_verified_bots=filter_verified_bots,
                 filter_llm_bots=filter_llm_bots,
             ):
                 # Convert Cloudflare record to IngestionRecord

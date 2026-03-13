@@ -54,7 +54,9 @@ class TestCreateTemporalBundles:
         base_time = datetime(2024, 1, 15, 10, 0, 0)
         df = self._create_requests_df([base_time])
 
-        bundles = create_temporal_bundles(df, window_ms=100)
+        bundles = create_temporal_bundles(
+            df, window_ms=100, timestamp_col="request_timestamp", url_col="request_uri"
+        )
 
         assert len(bundles) == 1
         assert bundles[0].request_count == 1
@@ -70,7 +72,9 @@ class TestCreateTemporalBundles:
         ]
         df = self._create_requests_df(timestamps)
 
-        bundles = create_temporal_bundles(df, window_ms=100)
+        bundles = create_temporal_bundles(
+            df, window_ms=100, timestamp_col="request_timestamp", url_col="request_uri"
+        )
 
         assert len(bundles) == 1
         assert bundles[0].request_count == 4
@@ -85,7 +89,9 @@ class TestCreateTemporalBundles:
         ]
         df = self._create_requests_df(timestamps)
 
-        bundles = create_temporal_bundles(df, window_ms=100)
+        bundles = create_temporal_bundles(
+            df, window_ms=100, timestamp_col="request_timestamp", url_col="request_uri"
+        )
 
         assert len(bundles) == 3
         for bundle in bundles:
@@ -109,7 +115,9 @@ class TestCreateTemporalBundles:
         ]
         df = self._create_requests_df(timestamps)
 
-        bundles = create_temporal_bundles(df, window_ms=100)
+        bundles = create_temporal_bundles(
+            df, window_ms=100, timestamp_col="request_timestamp", url_col="request_uri"
+        )
 
         assert len(bundles) == 3
         assert bundles[0].request_count == 3  # First cluster
@@ -125,7 +133,9 @@ class TestCreateTemporalBundles:
         ]
         df = self._create_requests_df(timestamps)
 
-        bundles = create_temporal_bundles(df, window_ms=100)
+        bundles = create_temporal_bundles(
+            df, window_ms=100, timestamp_col="request_timestamp", url_col="request_uri"
+        )
 
         # Exactly 100ms from bundle start is included (<=100ms check)
         assert len(bundles) == 1
@@ -140,7 +150,9 @@ class TestCreateTemporalBundles:
         ]
         df = self._create_requests_df(timestamps)
 
-        bundles = create_temporal_bundles(df, window_ms=100)
+        bundles = create_temporal_bundles(
+            df, window_ms=100, timestamp_col="request_timestamp", url_col="request_uri"
+        )
 
         assert len(bundles) == 2
         assert bundles[0].request_count == 1
@@ -162,7 +174,13 @@ class TestCreateTemporalBundles:
             }
         )
 
-        bundles = create_temporal_bundles(df, window_ms=100, group_by="bot_provider")
+        bundles = create_temporal_bundles(
+            df,
+            window_ms=100,
+            timestamp_col="request_timestamp",
+            url_col="request_uri",
+            group_by="bot_provider",
+        )
 
         # Should have 2 bundles (one per provider), each with 2 requests
         assert len(bundles) == 2
@@ -181,7 +199,9 @@ class TestCreateTemporalBundles:
         ]
         df = self._create_requests_df(timestamps)
 
-        bundles = create_temporal_bundles(df, window_ms=100)
+        bundles = create_temporal_bundles(
+            df, window_ms=100, timestamp_col="request_timestamp", url_col="request_uri"
+        )
 
         assert len(bundles) == 1
         bundle = bundles[0]
@@ -196,7 +216,9 @@ class TestCreateTemporalBundles:
         """Empty DataFrame should return empty bundle list."""
         df = pd.DataFrame(columns=["request_timestamp", "request_uri", "bot_provider"])
 
-        bundles = create_temporal_bundles(df, window_ms=100)
+        bundles = create_temporal_bundles(
+            df, window_ms=100, timestamp_col="request_timestamp", url_col="request_uri"
+        )
 
         assert bundles == []
 
@@ -211,7 +233,9 @@ class TestCreateTemporalBundles:
         ]
         df = self._create_requests_df(timestamps)
 
-        bundles = create_temporal_bundles(df, window_ms=100)
+        bundles = create_temporal_bundles(
+            df, window_ms=100, timestamp_col="request_timestamp", url_col="request_uri"
+        )
 
         # All should be in one bundle (sorted, all within 50ms)
         assert len(bundles) == 1
@@ -241,7 +265,9 @@ class TestTemporalAnalyzer:
 
     def test_load_data_returns_self_for_chaining(self):
         """load_data should return self for method chaining."""
-        analyzer = TemporalAnalyzer()
+        analyzer = TemporalAnalyzer(
+            timestamp_col="request_timestamp", url_col="request_uri"
+        )
         df = self._create_test_df()
 
         result = analyzer.load_data(df)
@@ -250,7 +276,9 @@ class TestTemporalAnalyzer:
 
     def test_create_bundles_uses_window_correctly(self):
         """create_bundles should use the specified window."""
-        analyzer = TemporalAnalyzer()
+        analyzer = TemporalAnalyzer(
+            timestamp_col="request_timestamp", url_col="request_uri"
+        )
         df = self._create_test_df()
         analyzer.load_data(df)
 
@@ -263,7 +291,9 @@ class TestTemporalAnalyzer:
 
     def test_create_bundles_with_optimal_window(self):
         """create_bundles should work with OPTIMAL_WINDOW_MS constant."""
-        analyzer = TemporalAnalyzer()
+        analyzer = TemporalAnalyzer(
+            timestamp_col="request_timestamp", url_col="request_uri"
+        )
         df = self._create_test_df()
         analyzer.load_data(df)
 
@@ -273,7 +303,9 @@ class TestTemporalAnalyzer:
 
     def test_get_bundle_stats_returns_statistics(self):
         """get_bundle_stats should return correct statistics."""
-        analyzer = TemporalAnalyzer()
+        analyzer = TemporalAnalyzer(
+            timestamp_col="request_timestamp", url_col="request_uri"
+        )
         df = self._create_test_df()
         analyzer.load_data(df)
 
@@ -294,14 +326,18 @@ class TestTemporalAnalyzer:
             df.to_sql("bot_requests_daily", conn, index=False)
 
         # Test loading with default column names (matches SQLite schema)
-        analyzer = TemporalAnalyzer()
+        analyzer = TemporalAnalyzer(
+            timestamp_col="request_timestamp", url_col="request_uri"
+        )
         result = analyzer.load_from_sqlite(str(db_path), "bot_requests_daily")
 
         assert result is analyzer
 
     def test_load_from_sqlite_file_not_found(self):
         """load_from_sqlite should raise FileNotFoundError for missing db."""
-        analyzer = TemporalAnalyzer()
+        analyzer = TemporalAnalyzer(
+            timestamp_col="request_timestamp", url_col="request_uri"
+        )
 
         with pytest.raises(FileNotFoundError, match="Database not found"):
             analyzer.load_from_sqlite("/nonexistent/path.db")
@@ -316,7 +352,9 @@ class TestTemporalAnalyzer:
             df.to_sql("bot_requests_daily", conn, index=False)
 
         # Uses default column names matching SQLite schema
-        analyzer = TemporalAnalyzer()
+        analyzer = TemporalAnalyzer(
+            timestamp_col="request_timestamp", url_col="request_uri"
+        )
         analyzer.load_from_sqlite(str(db_path), "bot_requests_daily")
         bundles = analyzer.create_bundles(window_ms=100)
 
@@ -333,7 +371,9 @@ class TestTemporalAnalyzer:
         with sqlite3.connect(str(db_path)) as conn:
             df.to_sql("bot_requests_daily", conn, index=False)
 
-        analyzer = TemporalAnalyzer()
+        analyzer = TemporalAnalyzer(
+            timestamp_col="request_timestamp", url_col="request_uri"
+        )
 
         with pytest.raises(ValueError, match="Invalid table name"):
             analyzer.load_from_sqlite(str(db_path), "malicious_table; DROP TABLE--")
@@ -421,7 +461,7 @@ class TestComputeInterRequestDeltas:
             }
         )
 
-        result = compute_inter_request_deltas(df)
+        result = compute_inter_request_deltas(df, timestamp_col="request_timestamp")
 
         assert "delta_ms" in result.columns
         # First row should have NaN delta

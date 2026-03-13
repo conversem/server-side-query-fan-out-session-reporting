@@ -143,12 +143,10 @@ class TestQueryFanoutSessionsSchema:
 
     def test_indexes_are_created(self, sqlite_backend):
         """All required indexes should be created."""
-        indexes = sqlite_backend.query(
-            """
+        indexes = sqlite_backend.query("""
             SELECT name FROM sqlite_master
             WHERE type='index' AND tbl_name='query_fanout_sessions'
-            """
-        )
+            """)
         index_names = {idx["name"] for idx in indexes}
 
         # Check for required indexes from PRD
