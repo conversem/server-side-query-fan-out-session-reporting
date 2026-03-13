@@ -79,7 +79,7 @@ For organizations needing production-grade LLM traffic analysis at scale:
 | **Monitoring & alerting** | — | ✓ |
 | **Dedicated support** | — | ✓ |
 
-<a href="mailto:ruben&#64;conversem&#46;com">ruben&#64;conversem&#46;com</a> for enterprise pricing and implementation.
+[Contact us](https://forms.gle/qoyLhf5K4p8399sG9) for enterprise pricing and implementation.
 
 ## Quick Start
 
