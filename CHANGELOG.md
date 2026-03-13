@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Third public release. Major expansion of reporting, pipeline modes, and database
 schema — with Excel reporting as a centrepiece: full multi-sheet workbooks covering
-sessions, URL-level performance, daily KPIs, and sitemap freshness analysis.
+sessions, URL-level performance, daily KPIs, and showing how sitemap lastmod date freshness correlate strongly with LLM preference; the more recent the page is updated the more likely it is fetched by e.g. ChatGPT-User.
 
 ### Added
 
