@@ -1,295 +1,278 @@
 # Server-Side Query Fan-Out Session monitoring & Reporting
 
-A research framework for **server-side LLM activity tracking**, including our newly introduced **Query Fan-Out Session** tracking methodology.
+[![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](LICENSE)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
+[![CI](https://github.com/conversem/server-side-query-fan-out-session-reporting/actions/workflows/ci.yml/badge.svg)](https://github.com/conversem/server-side-query-fan-out-session-reporting/actions)
+
+A research-backed pipeline for **server-side LLM activity tracking**, built around the
+**Query Fan-Out Session** methodology — a new way to measure how your content answers real
+user questions in AI interfaces.
 
 📄 **Read the research article:** [The Query Fan-Out Session: Server-side Query Fan-Out Tracking](https://conversem.com/the-query-fan-out-session/)
 
+---
+
 ## What is a Query Fan-Out Session?
 
-A **Query Fan-Out Session** is a bundle of web requests from an LLM chat assistant that originated from a single user question. When LLM-powered services (like ChatGPT, Perplexity, or Claude) process user queries, they fan out multiple rapid requests to gather information—often 4-5 requests within 10-20ms from a single user question. By detecting these bursts, we can group requests into meaningful sessions that represent actual user interactions.
+A **Query Fan-Out Session** is a bundle of web requests from an LLM chat assistant that
+originated from a single user question. When LLM-powered services (like ChatGPT, Perplexity,
+or Claude) process a query, they fan out multiple rapid requests to gather information —
+often 4–5 requests within 10–20ms from a single user question. By detecting these bursts,
+we can group requests into meaningful sessions that represent actual user interactions.
 
-**Key research findings:**
-- Most common gap between requests: **9ms**
-- 84% of request gaps: **≤ 20ms**
-- Optimal bundling window: **100ms** (91%+ sessions maintain high thematic coherence)
+This turns "500 ChatGPT requests today" into "your content answered approximately 220 AI-assisted
+user questions today" — a fundamentally more useful signal for content strategy and GEO measurement.
+
+**Key research findings** (validated on production server logs):
+
+| Observation | Value |
+|---|---|
+| Most common gap between requests | **9ms** |
+| Median gap between requests | **10ms** |
+| 84% of all request gaps | **≤ 20ms** |
+| 90% of all request gaps | **≤ 53ms** |
+| Sessions with high thematic coherence at 100ms window | **91%+** |
+| Over-bundling rate at 100ms window | **0.04%** |
+| Validation ranking agreement on hold-out data | **100%** |
+
+**Recommendation: 100ms as the standard bundling window.** Both OpenAI and Perplexity show
+consistent burst patterns (17–22ms median). The 100ms threshold captures genuine query fan-outs
+while virtually eliminating false merges between unrelated queries.
+
+**Multi-page sessions reveal topical authority.** When an LLM pulls 2–4 pages from your site
+in a single fan-out, it indicates the AI found multiple relevant pieces of content for one
+question — a strong topical authority signal. The grouped URLs also reveal the decision journey
+the LLM is composing an answer for.
 
 This framework allows you to reproduce the research and apply it to your own server logs:
 
-1. **Ingests** Export files from 8 platforms or Cloudflare logs via the Logpull API
-2. **Identifies** request bundles using temporal and semantic analysis
-3. **Optimizes** the time window for accurate session detection
-4. **Reports** bundled sessions in CSV/Excel format
+1. **Ingest** CDN logs from 8+ providers (Cloudflare, AWS ALB, AWS CloudFront, Azure CDN,
+   GCP CDN, Fastly, Akamai, Universal CSV/JSON/NDJSON) or via the Cloudflare Logpull API
+2. **Identify** request bursts using temporal bundling with the 100ms window
+3. **Refine** sessions with MIBCS collision detection — splits accidentally merged queries
+   using graph-based semantic analysis
+4. **Report** Query Fan-Out Sessions in multi-sheet Excel workbooks with KPIs, URL-level
+   performance, daily trends, and sitemap freshness
 
-## Key Features
+---
 
-- **Research-backed methodology**: Uses OptScore composite metric for window optimization
-- **Semantic analysis**: TF-IDF and Transformer-based URL embeddings
-- **Session refinement**: Collision detection and semantic splitting for improved purity
-- **Provider-specific tuning**: Different bots have different behaviors
-- **Reproducible experiments**: Configurable parameters with validation
+## v2.0: Production-Ready Pipeline
+
+Version 2.0 upgrades the framework from a research prototype to a modular production pipeline:
+
+- **8+ ingestion providers** — Cloudflare, AWS ALB, AWS CloudFront, Azure CDN, GCP CDN,
+  Fastly, Akamai, and Universal CSV/JSON/NDJSON
+- **Modular plugin architecture** — `IngestionAdapter` ABC with auto-discovery registry;
+  add new providers by implementing one class
+- **SQLite local analysis** — zero-config local storage with full schema including
+  sessions, sitemap data, and analytics views
+- **Multi-domain support** — per-domain SQLite databases; domain column throughout
+- **MIBCS collision detection** — semantic refinement splits accidentally merged sessions
+- **Multi-sheet Excel reporting** — sessions, URL performance, daily KPIs, sitemap freshness
+- **Sitemap freshness tracking** — URL coverage analysis and decay rate monitoring
+- **Local BigQuery modes** — push data from your machine to BigQuery without cloud
+  infrastructure (`local_bq_buffered`, `local_bq_streaming`)
+- **Database migration tooling** — idempotent v1→v2 schema migration with dry-run support
+- **Research module** — reproduce the OptScore window experiments on your own data
+
+---
+
+## Enterprise: Managed Cloud Pipeline
+
+For organizations needing production-grade LLM traffic analysis at scale:
+
+| Feature | Open Source | Enterprise |
+|---------|:-----------:|:----------:|
+| 8+ ingestion providers | ✓ | ✓ |
+| SQLite local analysis | ✓ | ✓ |
+| Multi-domain (SQLite per domain) | ✓ | ✓ |
+| Session analysis (MIBCS) | ✓ | ✓ |
+| Excel reporting | ✓ | ✓ |
+| Local BigQuery modes | ✓ | ✓ |
+| **GCP BigQuery cloud pipeline** | — | ✓ |
+| **Cloud Run automated scheduling** | — | ✓ |
+| **Looker Studio dashboards** | — | ✓ |
+| **Multi-domain cloud orchestration** | — | ✓ |
+| **Monitoring & alerting** | — | ✓ |
+| **Dedicated support** | — | ✓ |
+
+[Contact us](https://conversem.com/contact/) for enterprise pricing and implementation.
+
+---
 
 ## Quick Start
 
 ### Prerequisites
 
-**Required:**
-- Python 3.11+
-- pip or pipenv for package management
-- 2GB+ free disk space for logs and database
+- Python 3.10+
+- 2 GB+ free disk space for logs and database
 
-**For Cloudflare Logpull API:**
-- Cloudflare account with API access
-- API token with "Zone Logs:Read" permission
-- Zone ID for your domain
-
-**For File-Based Ingestion:**
-- Exported log files from your CDN provider
-- Supported formats: CSV, JSON, NDJSON, W3C Extended Log Format
-- Gzip compression supported (.gz files)
-
-**For Secrets Management:**
-- SOPS and Age for encrypted configuration
-
-### 1. Clone and Setup
+### Option A: Local SQLite + Excel (zero cloud dependencies)
 
 ```bash
 git clone https://github.com/conversem/server-side-query-fan-out-session-reporting.git
 cd server-side-query-fan-out-session-reporting
 
 python -m venv venv
-source venv/bin/activate  # Linux/Mac
-# or: .\venv\Scripts\Activate.ps1  # Windows PowerShell
+source venv/bin/activate        # Linux/Mac
+# .\venv\Scripts\Activate.ps1  # Windows PowerShell
 
-pip install -r requirements.txt
-```
+pip install .
+# For session refinement (ML): pip install ".[ml]"
 
-### 2. Configure Secrets (Required)
-
-This project uses SOPS for secure secret management.
-
-```bash
-# Install SOPS and Age
-brew install sops age  # macOS
-# See docs/sops/quickstart.md for Linux/Windows
-
-# Generate your encryption key
-mkdir -p ~/.sops/age
-age-keygen -o ~/.sops/age/keys.txt
-# Note the public key from the output
-
-# Configure SOPS
-cp .sops.yaml.example .sops.yaml
-# Edit .sops.yaml and replace age1YOUR_PUBLIC_KEY_HERE with your key
-
-# Set environment variable (add to ~/.bashrc or ~/.zshrc)
-export SOPS_AGE_KEY_FILE=~/.sops/age/keys.txt
-
-# Create and encrypt your config
+# Configure
 cp config.example.yaml config.yaml
-# Edit config.yaml with your Cloudflare credentials
-sops -e config.yaml > config.enc.yaml
-rm config.yaml  # Remove unencrypted version
+# Edit config.yaml with your settings, then encrypt:
+sops -e config.yaml > config.enc.yaml && rm config.yaml
+
+# Ingest logs
+python scripts/ingest_logs.py --provider cloudflare --input ./logs/
+
+# Run ETL pipeline
+python scripts/run_pipeline.py --start-date 2025-01-01 --end-date 2025-01-07
+
+# Export Excel report
+python scripts/export_session_report.py --output data/reports/sessions.xlsx
 ```
 
-See [docs/sops/quickstart.md](docs/sops/quickstart.md) for detailed instructions.
-
-### 3. Ingest Logs
-
-**From Cloudflare API:**
-```bash
-# Pull last 7 days of logs from Cloudflare
-python scripts/ingest_logs.py --provider cloudflare --input api://zone_id \
-  --start-date 2024-01-01 --end-date 2024-01-07
-```
-
-**From Exported Files (8 providers supported):**
-```bash
-# AWS CloudFront (W3C format)
-python scripts/ingest_logs.py --provider aws_cloudfront --input ./cloudfront-logs/
-
-# AWS ALB access logs
-python scripts/ingest_logs.py --provider aws_alb --input ./alb-logs/
-
-# Cloudflare (JSON/CSV)
-python scripts/ingest_logs.py --provider cloudflare --input ./cloudflare-export.json
-
-# Azure CDN / Front Door
-python scripts/ingest_logs.py --provider azure_cdn --input ./azure-logs.json
-
-# Google Cloud CDN
-python scripts/ingest_logs.py --provider gcp_cdn --input ./gcp-logs.json
-
-# Fastly
-python scripts/ingest_logs.py --provider fastly --input ./fastly-logs.json
-
-# Akamai DataStream
-python scripts/ingest_logs.py --provider akamai --input ./akamai-logs.json
-
-# Universal format (CSV/JSON from any provider)
-python scripts/ingest_logs.py --provider universal --input ./logs.csv
-```
-
-See [Provider Guides](docs/ingestion/providers/) for detailed export instructions.
-
-### 4. Run ETL Pipeline
+### Option B: Docker
 
 ```bash
-python scripts/run_pipeline.py --start-date 2024-01-01 --end-date 2024-01-07
+cp config.example.yaml config.yaml
+# Edit config.yaml, then encrypt with SOPS
+
+docker compose run --rm app \
+  python scripts/ingest_logs.py --provider cloudflare --input ./logs/
+docker compose run --rm app \
+  python scripts/run_pipeline.py --start-date 2025-01-01 --end-date 2025-01-07
 ```
 
-### 5. Run Window Optimization Experiment
+### Option C: Local BigQuery modes
+
+Push data from your machine to BigQuery without any cloud infrastructure:
 
 ```bash
-# Run with default settings
-python scripts/run_window_experiment.py
+pip install ".[gcp]"
 
-# Custom windows
-python scripts/run_window_experiment.py --windows 50,100,500,1000,3000
+export PROCESSING_MODE=local_bq_streaming
+
+python scripts/ingest_logs.py --provider cloudflare --input ./logs/
+python scripts/run_pipeline.py --start-date 2025-01-01 --end-date 2025-01-07
 ```
 
-### 6. Export Session Reports
+---
+
+## Ingestion Providers
+
+| Provider | Format | Configuration |
+|----------|--------|---------------|
+| **Cloudflare** | Logpull API / Logpush files | `--provider cloudflare` |
+| **AWS ALB** | Access log format | `--provider aws_alb` |
+| **AWS CloudFront** | W3C extended log format | `--provider aws_cloudfront` |
+| **Azure CDN** | Access log format | `--provider azure_cdn` |
+| **GCP Cloud CDN** | HTTP/S load balancer logs | `--provider gcp_cdn` |
+| **Fastly** | Access log format | `--provider fastly` |
+| **Akamai** | Datastream 2 format | `--provider akamai` |
+| **Universal** | CSV / JSON / NDJSON | `--provider universal` |
+
+See [docs/ingestion/](docs/ingestion/README.md) for provider-specific guides.
+
+---
+
+## Pipeline Modes
+
+| Mode | Storage | Compute | Requirements |
+|------|---------|---------|-------------|
+| `local_sqlite` | SQLite | Local Python | None (default) |
+| `local_bq_buffered` | SQLite → BigQuery | Local Python | GCP project |
+| `local_bq_streaming` | Memory → BigQuery | Local Python | GCP project |
 
 ```bash
-# Export to Excel
-python scripts/export_session_report.py --format xlsx --output data/reports/sessions.xlsx
-
-# Export to CSV with filters
-python scripts/export_session_report.py \
-    --start-date 2024-01-01 \
-    --provider OpenAI \
-    --output data/reports/openai_sessions.csv
+export PROCESSING_MODE=local_sqlite   # default
 ```
 
-## Research Methodology
+---
 
-### OptScore Formula
+## Multi-Domain Analysis
 
-The framework uses a composite optimization score:
-
-```
-OptScore = α·MIBCS + β·Silhouette + γ·BPS - δ·SingletonRate - ε·GiantRate - ζ·ThematicVariance
-```
-
-| Component | Weight | Description |
-|-----------|--------|-------------|
-| MIBCS | α=0.30 | Mean Intra-Bundle Cosine Similarity |
-| Silhouette | β=0.25 | Cluster separation quality |
-| BPS | γ=0.25 | Bundle Purity Score |
-| SingletonRate | δ=0.10 | Penalty for single-request bundles |
-| GiantRate | ε=0.05 | Penalty for oversized bundles |
-| ThematicVariance | ζ=0.05 | Penalty for thematic inconsistency |
-
-### Experiment Output
-
-Running `run_window_experiment.py` produces:
-
-- **Optimal window recommendation** with confidence level
-- **Per-provider analysis** showing behavioral differences
-- **Validation metrics** from hold-out testing
-- **Visualization** of window comparisons
-
-## Project Structure
-
-```
-├── src/llm_bot_pipeline/
-│   ├── ingestion/       # Multi-provider log ingestion (8 adapters)
-│   ├── cloudflare/      # Logpull API integration
-│   ├── storage/         # SQLite storage layer
-│   ├── pipeline/        # ETL processing
-│   ├── research/        # Window optimization algorithms
-│   └── reporting/       # Session aggregation & export
-├── scripts/             # CLI entry points
-├── docs/                # Documentation
-└── tests/               # Test suite
-```
-
-See [docs/architecture.md](docs/architecture.md) for detailed architecture.
-
-## Sample Data
-
-Generate synthetic data for testing:
+Run independent analysis for multiple websites with isolated databases:
 
 ```bash
-python scripts/generate_sample_data.py --output data/sample_requests.csv --count 5000
+python scripts/run_multi_domain.py \
+  --config config.enc.yaml \
+  --start-date 2025-01-01 \
+  --end-date 2025-01-07
 ```
 
-## Configuration
+Each domain gets its own SQLite database (`data/{domain}.db`). Domain is tracked as a column
+in every table.
 
-### config.example.yaml
+---
 
-```yaml
-storage:
-  backend: "sqlite"
-  sqlite_db_path: "data/llm-bot-logs.db"
+## Upgrading from v1
 
-cloudflare:
-  api_token: "your-cloudflare-api-token"
-  zone_id: "your-zone-id"
+If you have an existing v1 database, run the migration script:
+
+```bash
+python scripts/migrations/migrate_v1_to_v2.py --db-path data/llm-bot-logs.db
+
+# Dry run first
+python scripts/migrations/migrate_v1_to_v2.py --db-path data/llm-bot-logs.db --dry-run
 ```
 
-## Security
+See [docs/migration-v1-to-v2.md](docs/migration-v1-to-v2.md) for the full upgrade guide.
 
-The ingestion pipeline includes multiple security layers for processing untrusted log data:
-
-- **Path Traversal Protection** - Prevents directory escape attacks with `--base-dir`
-- **Input Sanitization** - Cleans field values and removes control characters
-- **Field Length Limits** - Prevents DoS via oversized fields
-- **Rate Limiting** - Protects API endpoints from abuse
-- **File Size Limits** - Configurable with `--max-file-size`
-
-See [docs/ingestion/security.md](docs/ingestion/security.md) for detailed security documentation.
+---
 
 ## Documentation
 
-- [Architecture Overview](docs/architecture.md)
-- [Security Guide](docs/ingestion/security.md)
-- [CLI Usage](docs/ingestion/cli-usage.md)
-- [Provider Guides](docs/ingestion/providers/)
-  - [AWS CloudFront](docs/ingestion/providers/aws-cloudfront.md)
-  - [AWS ALB](docs/ingestion/providers/aws-alb-format.md)
-  - [Cloudflare](docs/ingestion/providers/cloudflare.md)
-  - [Azure CDN](docs/ingestion/providers/azure-cdn.md)
-  - [Google Cloud CDN](docs/ingestion/providers/gcp-cdn-format.md)
-  - [Fastly](docs/ingestion/providers/fastly-format.md)
-  - [Akamai](docs/ingestion/providers/akamai-format.md)
-- [SOPS Quick Start](docs/sops/quickstart.md)
-- [Research Article: The Query Fan-Out Session](https://conversem.com/the-query-fan-out-session/)
+| Topic | Link |
+|-------|------|
+| Architecture overview | [docs/architecture.md](docs/architecture.md) |
+| Processing modes | [docs/processing-modes.md](docs/processing-modes.md) |
+| Storage backend guide | [docs/backend-guide.md](docs/backend-guide.md) |
+| Ingestion providers | [docs/ingestion/](docs/ingestion/README.md) |
+| SOPS configuration | [docs/sops/quickstart.md](docs/sops/quickstart.md) |
+| Session methodology | [docs/query-fanout-sessions.md](docs/query-fanout-sessions.md) |
+| Excel reporting | [docs/reporting-excel.md](docs/reporting-excel.md) |
+| Sitemap analysis | [docs/sitemap-analysis.md](docs/sitemap-analysis.md) |
+| Security | [docs/security.md](docs/security.md) |
+| v1→v2 migration | [docs/migration-v1-to-v2.md](docs/migration-v1-to-v2.md) |
+| Contributing | [CONTRIBUTING.md](CONTRIBUTING.md) |
 
-## Contributing
+---
 
-Contributions are welcome! Please read the [contributing guidelines](CONTRIBUTING.md) before submitting PRs.
+## Requirements
+
+- **Python** 3.10 or later
+- **Core** (`pip install .`): cloudflare, pandas, openpyxl, defusedxml, pyyaml, httpx
+- **ML** (`pip install ".[ml]"`): scikit-learn, scipy, sentence-transformers
+- **GCP** (`pip install ".[gcp]"`): google-cloud-bigquery (for local BQ modes)
+- **Viz** (`pip install ".[viz]"`): matplotlib (for research visualizations)
+
+---
 
 ## License
 
 This project is licensed under the [GNU Affero General Public License v3.0](LICENSE) (AGPL-3.0).
 
-### What this means
+For commercial licensing or enterprise implementation, contact
+[conversem.com/contact](https://conversem.com/contact/).
 
-- ✅ **Free to use** for internal tools, consulting, and client services
-- ✅ **Free to modify** and adapt for your organization
-- ✅ **Free to distribute** with attribution
-- ⚠️ **SaaS/hosted services**: If you offer this as a hosted service, AGPL-3.0 requires you to release your source code under the same license.
-
-### Commercial Licensing
-
-For organizations that want to incorporate this into proprietary SaaS products without the AGPL-3.0 open-source requirements, commercial licenses are available. [Contact me](https://conversem.com/contact/).
+---
 
 ## Citation
 
-If you use this framework in your research, please cite:
+If you use this pipeline or the Query Fan-Out Session methodology in your research:
 
-> Remy, R. (2025). *Query Fan-Out Session Analysis: Determining Optimal Time Windows for LLM Bot Request Bundling*. Conversem Research Report.
+> Remy, R. (2025). *Query Fan-Out Session Analysis: Determining Optimal Time Windows for
+> LLM Bot Request Bundling*. Conversem Research Report.
 
 ```bibtex
-@article{remy2025queryfanout,
+@misc{remy2025queryfanout,
   author = {Remy, Ruben},
-  title = {The Query Fan-Out Session: Server-side Query Fan-Out Tracking},
-  year = {2025},
-  url = {https://conversem.com/the-query-fan-out-session/},
-  publisher = {Conversem}
+  title  = {The Query Fan-Out Session: Server-side Query Fan-Out Tracking},
+  year   = {2025},
+  url    = {https://conversem.com/the-query-fan-out-session/}
 }
 ```
-
-## About
-
-This open-source release accompanies the research article on [The Query Fan-Out Session: Server-side Query Fan-Out Tracking](https://conversem.com/the-query-fan-out-session/). The methodology enables publishers to understand how their content contributes to answering real user questions in AI interfaces—moving beyond simple request counting to meaningful session-based metrics.
