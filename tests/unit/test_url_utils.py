@@ -128,22 +128,22 @@ class TestDeriveSessionName:
         assert derive_session_name(url) == "HomeBuyingGuide"
 
     def test_prd_example_1(self):
-        """Test example from PRD."""
+        """Test example from methodology."""
         url = "example.nl/blog/home-buying-guide"
         assert derive_session_name(url) == "home buying guide"
 
     def test_prd_example_2(self):
-        """Test example from PRD."""
+        """Test example from methodology."""
         url = "example.nl/mortgage/calculator"
         assert derive_session_name(url) == "calculator"
 
     def test_prd_example_3(self):
-        """Test example from PRD."""
+        """Test example from methodology."""
         url = "example.nl/tips/first-time-buyer-checklist"
         assert derive_session_name(url) == "first time buyer checklist"
 
     def test_prd_example_4(self):
-        """Test example from PRD."""
+        """Test example from methodology."""
         url = "example.nl/"
         assert derive_session_name(url) == "homepage"
 

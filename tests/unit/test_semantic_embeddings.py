@@ -40,7 +40,7 @@ class TestTokenizeUrl:
         assert result == "user profile settings"
 
     def test_dot_splitting(self):
-        """Should split segments by dots (PRD requirement)."""
+        """Should split segments by dots."""
         result = tokenize_url("/docs/api.v2.html")
         assert result == "docs api v2 html"
 
@@ -70,12 +70,12 @@ class TestTokenizeUrl:
         assert result == ""
 
     def test_prd_example_1(self):
-        """PRD example: /blog/home-buying-guide → blog home buying guide."""
+        """Example: /blog/home-buying-guide → blog home buying guide."""
         result = tokenize_url("/blog/home-buying-guide")
         assert result == "blog home buying guide"
 
     def test_prd_example_2(self):
-        """PRD example: /mortgage/calculator → mortgage calculator."""
+        """Example: /mortgage/calculator → mortgage calculator."""
         result = tokenize_url("/mortgage/calculator")
         assert result == "mortgage calculator"
 
@@ -288,14 +288,14 @@ class TestConfidenceThresholds:
         assert CONFIDENCE_THRESHOLDS is not None
 
     def test_high_thresholds(self):
-        """High thresholds should match PRD spec."""
+        """High thresholds should be correctly set."""
         from llm_bot_pipeline.research.semantic_embeddings import CONFIDENCE_THRESHOLDS
 
         assert CONFIDENCE_THRESHOLDS["high"]["mean_similarity"] == 0.7
         assert CONFIDENCE_THRESHOLDS["high"]["min_similarity"] == 0.5
 
     def test_medium_thresholds(self):
-        """Medium thresholds should match PRD spec."""
+        """Medium thresholds should be correctly set."""
         from llm_bot_pipeline.research.semantic_embeddings import CONFIDENCE_THRESHOLDS
 
         assert CONFIDENCE_THRESHOLDS["medium"]["mean_similarity"] == 0.5
@@ -521,8 +521,8 @@ class TestIntegration:
         assert confidence in ["high", "medium", "low"]
 
     def test_prd_example_urls(self):
-        """Test with PRD example URLs."""
-        # From PRD: Related topics should have reasonable similarity
+        """Test with example URLs."""
+        # Related topics should have reasonable similarity
         urls = [
             "/blog/home-buying-guide",
             "/mortgage/calculator",
