@@ -2,9 +2,9 @@
 
 [![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
-[![CI](https://github.com/conversem/server-side-query-fan-out-session-reporting/actions/workflows/ci.yml/badge.svg)](https://github.com/conversem/server-side-query-fan-out-session-reporting/actions)
+[![Release](https://img.shields.io/badge/release-v2.0.0-brightgreen.svg)](CHANGELOG.md)
 
-A research framework for **server-side LLM activity tracking**, including our newly introduced
+A research framework and reporting pipeline for **server-side LLM activity tracking**, including our newly introduced
 **Query Fan-Out Session** tracking methodology.
 
 📄 **Read the research article:** [The Query Fan-Out Session: Server-side Query Fan-Out Tracking](https://conversem.com/the-query-fan-out-session/)
