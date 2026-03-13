@@ -5,7 +5,7 @@ Provides merging, splitting, and quality scoring of temporal bundles
 before they are stored as session records. Works with BundleResult
 from TemporalBundler and prepares refined sessions for storage.
 
-Used by SessionAggregator (future integration in task 58) as the
+Used by SessionAggregator (future SessionAggregator integration) as the
 Stage 2 refinement step between temporal bundling and storage.
 
 Three refinement stages:

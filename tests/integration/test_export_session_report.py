@@ -289,7 +289,7 @@ class TestExcelExport:
 
         df = pd.read_excel(output_path, sheet_name="Sessions")
 
-        # Verify PRD-specified columns
+        # Verify expected columns
         required_columns = [
             "session_id",
             "fanout_session_name",

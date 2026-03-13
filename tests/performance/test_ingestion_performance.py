@@ -1,7 +1,7 @@
 """
 Performance benchmarks for ingestion pipeline.
 
-Validates that the ingestion system meets PRD performance targets:
+Validates that the ingestion system meets performance targets:
 - CSV parsing: >50,000 lines/second
 - JSON parsing: >50,000 lines/second
 - SQLite batch insert: >10,000 records/second

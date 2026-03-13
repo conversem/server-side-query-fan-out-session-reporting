@@ -3,7 +3,7 @@ Backfill state manager for gcp_bq mode resume capability.
 
 Tracks which dates were successfully completed in a backfill run so partial
 failures can be resumed without re-processing. Uses the CheckpointManager
-pattern from task 39.
+checkpoint/resume pattern.
 """
 
 import json

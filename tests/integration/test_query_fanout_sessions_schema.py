@@ -27,11 +27,11 @@ class TestQueryFanoutSessionsSchema:
         assert sqlite_backend.table_exists("query_fanout_sessions")
 
     def test_schema_has_all_required_fields(self, sqlite_backend):
-        """Schema should have all required fields from PRD."""
+        """Schema should have all required fields."""
         schema_info = sqlite_backend.get_schema_info()
         columns = {col["name"]: col for col in schema_info["query_fanout_sessions"]}
 
-        # Required fields from PRD
+        # Required fields
         required_fields = [
             "id",
             "session_id",
@@ -149,7 +149,7 @@ class TestQueryFanoutSessionsSchema:
             """)
         index_names = {idx["name"] for idx in indexes}
 
-        # Check for required indexes from PRD
+        # Check for required indexes
         required_indexes = {
             "idx_sessions_date",
             "idx_sessions_provider",
