@@ -37,7 +37,7 @@ fan-outs while virtually eliminating false merges between unrelated queries.
 site in a single fan-out, the AI found multiple relevant pieces of content for one question.
 The grouped URLs also reveal the decision journey the LLM is composing an answer for.
 
-This framework allows you to reproduce the research and apply it to your own server logs:
+This framework allows you to reproduce the research and create query-fanout-session reporting applied to your own server logs:
 
 1. **Ingest** CDN logs from 8+ providers (Cloudflare, AWS ALB, AWS CloudFront, Azure CDN,
    GCP CDN, Fastly, Akamai, Universal CSV/JSON/NDJSON) or via the Cloudflare Logpull API
@@ -47,7 +47,7 @@ This framework allows you to reproduce the research and apply it to your own ser
 4. **Report** Query Fan-Out Sessions in multi-sheet Excel workbooks with KPIs, URL-level
    performance, daily trends, and sitemap freshness
 
-## Key Features
+## Key Features of the Open Source Release
 
 - **Research-backed methodology**: Uses OptScore composite metric for window optimization
 - **Semantic analysis**: TF-IDF and Transformer-based URL embeddings for session coherence
@@ -79,7 +79,7 @@ For organizations needing production-grade LLM traffic analysis at scale:
 | **Monitoring & alerting** | — | ✓ |
 | **Dedicated support** | — | ✓ |
 
-[Contact us](https://conversem.com/contact/) for enterprise pricing and implementation.
+<a href="mailto:ruben&#64;conversem&#46;com">ruben&#64;conversem&#46;com</a> for enterprise pricing and implementation.
 
 ## Quick Start
 
