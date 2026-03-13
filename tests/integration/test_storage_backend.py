@@ -7,11 +7,15 @@ Tests:
 - Clean record insertion and retrieval
 - Date range queries and counts
 - Table existence checks
+- Vacuum after large deletes
 """
 
 from datetime import timedelta
+from unittest.mock import patch
 
 import pytest
+
+from llm_bot_pipeline.storage.factory import get_backend
 
 
 class TestSQLiteBackendInitialization:
@@ -27,6 +31,8 @@ class TestSQLiteBackendInitialization:
         assert sqlite_backend.table_exists("bot_requests_daily")
         assert sqlite_backend.table_exists("daily_summary")
         assert sqlite_backend.table_exists("url_performance")
+        assert sqlite_backend.table_exists("query_fanout_sessions")
+        assert sqlite_backend.table_exists("session_url_details")
 
     def test_backend_type_is_sqlite(self, sqlite_backend):
         """Backend type should be sqlite."""
@@ -158,3 +164,220 @@ class TestQueryOperations:
             "UPDATE raw_bot_requests SET BotScore = 99 WHERE ClientCountry = 'XX'"
         )
         assert affected == 0
+
+
+class TestVacuumAfterLargeDeletes:
+    """Tests for automatic vacuum after bulk deletes."""
+
+    def test_vacuum_called_when_threshold_exceeded(
+        self, temp_db_path, sample_records_small
+    ):
+        """Vacuum should run when cumulative deletes exceed threshold."""
+        backend = get_backend(
+            "sqlite",
+            db_path=temp_db_path,
+            vacuum_threshold=5,
+        )
+        backend.initialize()
+        backend.insert_raw_records(sample_records_small)
+
+        with patch.object(backend, "vacuum") as mock_vacuum:
+            backend.execute("DELETE FROM raw_bot_requests WHERE 1=1")
+            mock_vacuum.assert_called_once()
+        backend.close()
+
+    def test_no_vacuum_when_threshold_not_exceeded(
+        self, temp_db_path, sample_records_small
+    ):
+        """Vacuum should not run when deletes below threshold."""
+        backend = get_backend(
+            "sqlite",
+            db_path=temp_db_path,
+            vacuum_threshold=10_000,
+        )
+        backend.initialize()
+        backend.insert_raw_records(sample_records_small)
+
+        with patch.object(backend, "vacuum") as mock_vacuum:
+            backend.execute("DELETE FROM raw_bot_requests WHERE 1=1")
+            mock_vacuum.assert_not_called()
+        backend.close()
+
+    def test_no_vacuum_when_disabled(self, temp_db_path, sample_records_small):
+        """Vacuum should not run when vacuum_threshold is 0."""
+        backend = get_backend(
+            "sqlite",
+            db_path=temp_db_path,
+            vacuum_threshold=0,
+        )
+        backend.initialize()
+        backend.insert_raw_records(sample_records_small)
+
+        with patch.object(backend, "vacuum") as mock_vacuum:
+            backend.execute("DELETE FROM raw_bot_requests WHERE 1=1")
+            mock_vacuum.assert_not_called()
+        backend.close()
+
+
+class TestSessionUrlDetailsTable:
+    """Tests for session_url_details table schema and indexes."""
+
+    def test_session_url_details_table_exists(self, sqlite_backend):
+        """session_url_details table should be created on initialization."""
+        assert sqlite_backend.table_exists("session_url_details")
+
+    def test_session_url_details_has_correct_columns(self, sqlite_backend):
+        """session_url_details should have all required columns."""
+        columns = sqlite_backend.query("PRAGMA table_info(session_url_details)")
+        column_names = {col["name"] for col in columns}
+
+        expected_columns = {
+            "id",
+            "session_id",
+            "session_date",
+            "domain",
+            "url",
+            "url_position",
+            "bot_provider",
+            "bot_name",
+            "fanout_session_name",
+            "session_unique_urls",
+            "session_request_count",
+            "session_duration_ms",
+            "mean_cosine_similarity",
+            "min_cosine_similarity",
+            "max_cosine_similarity",
+            "confidence_level",
+            "session_start_time",
+            "session_end_time",
+            "window_ms",
+            "splitting_strategy",
+            "_created_at",
+        }
+        assert expected_columns == column_names
+
+    def test_session_url_details_indexes_exist(self, sqlite_backend):
+        """session_url_details should have all required indexes."""
+        indexes = sqlite_backend.query("PRAGMA index_list(session_url_details)")
+        index_names = {idx["name"] for idx in indexes}
+
+        expected_indexes = {
+            "idx_session_url_details_date",
+            "idx_session_url_details_url",
+            "idx_session_url_details_session",
+            "idx_session_url_details_bot",
+            "idx_session_url_details_unique_urls",
+        }
+        assert expected_indexes.issubset(index_names)
+
+    def test_session_url_details_foreign_key_constraint(self, sqlite_backend):
+        """session_url_details should have foreign key to query_fanout_sessions."""
+        fk_info = sqlite_backend.query("PRAGMA foreign_key_list(session_url_details)")
+        assert len(fk_info) == 1
+        assert fk_info[0]["table"] == "query_fanout_sessions"
+        assert fk_info[0]["from"] == "session_id"
+        assert fk_info[0]["to"] == "session_id"
+
+
+class TestReportingViews:
+    """Tests for reporting views created during initialization."""
+
+    def _view_exists(self, backend, view_name: str) -> bool:
+        """Check if a view exists in the database."""
+        result = backend.query(
+            "SELECT name FROM sqlite_master WHERE type='view' AND name=:name",
+            {"name": view_name},
+        )
+        return len(result) > 0
+
+    def test_v_session_url_distribution_view_exists(self, sqlite_backend):
+        """v_session_url_distribution view should be created on initialization."""
+        assert self._view_exists(sqlite_backend, "v_session_url_distribution")
+
+    def test_v_session_singleton_binary_view_exists(self, sqlite_backend):
+        """v_session_singleton_binary view should be created on initialization."""
+        assert self._view_exists(sqlite_backend, "v_session_singleton_binary")
+
+    def test_v_bot_volume_view_exists(self, sqlite_backend):
+        """v_bot_volume view should be created on initialization."""
+        assert self._view_exists(sqlite_backend, "v_bot_volume")
+
+    def test_v_top_session_topics_view_exists(self, sqlite_backend):
+        """v_top_session_topics view should be created on initialization."""
+        assert self._view_exists(sqlite_backend, "v_top_session_topics")
+
+    def test_v_daily_kpis_view_exists(self, sqlite_backend):
+        """v_daily_kpis view should be created on initialization."""
+        assert self._view_exists(sqlite_backend, "v_daily_kpis")
+
+    def test_v_category_comparison_view_exists(self, sqlite_backend):
+        """v_category_comparison view should be created on initialization."""
+        assert self._view_exists(sqlite_backend, "v_category_comparison")
+
+    def test_v_url_cooccurrence_view_exists(self, sqlite_backend):
+        """v_url_cooccurrence view should be created on initialization."""
+        assert self._view_exists(sqlite_backend, "v_url_cooccurrence")
+
+    def test_all_seven_views_created(self, sqlite_backend):
+        """All 7 reporting views should be created."""
+        views = sqlite_backend.query(
+            "SELECT name FROM sqlite_master WHERE type='view' ORDER BY name"
+        )
+        view_names = {v["name"] for v in views}
+
+        expected_views = {
+            "v_session_url_distribution",
+            "v_session_singleton_binary",
+            "v_bot_volume",
+            "v_top_session_topics",
+            "v_daily_kpis",
+            "v_category_comparison",
+            "v_url_cooccurrence",
+        }
+        assert expected_views.issubset(view_names)
+
+    def test_v_session_url_distribution_has_correct_columns(self, sqlite_backend):
+        """v_session_url_distribution should have expected columns."""
+        columns = sqlite_backend.query("PRAGMA table_info(v_session_url_distribution)")
+        column_names = {col["name"] for col in columns}
+        expected = {"session_date", "url_bucket", "sort_order", "session_count"}
+        assert expected == column_names
+
+    def test_v_daily_kpis_has_correct_columns(self, sqlite_backend):
+        """v_daily_kpis should have all KPI columns."""
+        columns = sqlite_backend.query("PRAGMA table_info(v_daily_kpis)")
+        column_names = {col["name"] for col in columns}
+
+        expected_columns = {
+            "session_date",
+            "total_sessions",
+            "unique_urls_requested",
+            "avg_urls_per_session",
+            "singleton_count",
+            "singleton_rate",
+            "multi_url_count",
+            "multi_url_rate",
+            "mean_mibcs_multi_url",
+            "high_confidence_count",
+            "high_confidence_rate",
+            "medium_confidence_count",
+            "low_confidence_count",
+        }
+        assert expected_columns == column_names
+
+    def test_v_url_cooccurrence_has_correct_columns(self, sqlite_backend):
+        """v_url_cooccurrence should have expected columns."""
+        columns = sqlite_backend.query("PRAGMA table_info(v_url_cooccurrence)")
+        column_names = {col["name"] for col in columns}
+
+        expected_columns = {
+            "session_id",
+            "session_date",
+            "url",
+            "bot_name",
+            "topic",
+            "session_unique_urls",
+            "mean_cosine_similarity",
+            "confidence_level",
+        }
+        assert expected_columns == column_names

@@ -1,7 +1,8 @@
 """
 Storage abstraction layer for LLM bot traffic pipeline.
 
-Provides a unified interface for data storage operations using SQLite.
+Provides a unified interface for data storage operations supporting
+multiple backends (SQLite, BigQuery, etc.).
 
 Usage:
     from llm_bot_pipeline.storage import get_backend
@@ -11,6 +12,7 @@ Usage:
 
     # Or explicitly specify backend
     backend = get_backend('sqlite', db_path='data/logs.db')
+    backend = get_backend('bigquery', project_id='my-project')
 
     # Use as context manager
     with get_backend() as backend:
@@ -19,11 +21,15 @@ Usage:
 """
 
 from .base import (
+    BackendCapabilities,
+    DiskSpaceError,
     QueryError,
     SchemaError,
     StorageBackend,
     StorageConnectionError,
     StorageError,
+    validate_date_column,
+    validate_table_name,
 )
 from .factory import (
     get_backend,
@@ -34,11 +40,16 @@ from .factory import (
 
 __all__ = [
     # Base classes and exceptions
+    "BackendCapabilities",
     "StorageBackend",
     "StorageError",
     "StorageConnectionError",
     "QueryError",
     "SchemaError",
+    "DiskSpaceError",
+    # Validation
+    "validate_table_name",
+    "validate_date_column",
     # Factory functions
     "get_backend",
     "register_backend",

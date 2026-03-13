@@ -36,6 +36,7 @@ from typing import Optional
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from llm_bot_pipeline.pipeline.local_pipeline import setup_logging
+from llm_bot_pipeline.utils.date_utils import parse_date
 
 logger = logging.getLogger(__name__)
 
@@ -617,16 +618,6 @@ def output_stats(records: list[dict]):
 # =============================================================================
 # CLI
 # =============================================================================
-
-
-def parse_date(date_str: str) -> date:
-    """Parse date string in YYYY-MM-DD format."""
-    try:
-        return datetime.strptime(date_str, "%Y-%m-%d").date()
-    except ValueError:
-        raise argparse.ArgumentTypeError(
-            f"Invalid date format: {date_str}. Use YYYY-MM-DD"
-        )
 
 
 def main():

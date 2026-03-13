@@ -17,6 +17,7 @@ CLEAN_BOT_REQUESTS_COLUMNS = {
     # Request details
     "request_uri": "TEXT",
     "request_host": "TEXT",
+    "domain": "TEXT",
     "url_path": "TEXT",
     "url_path_depth": "INTEGER",
     # Bot classification

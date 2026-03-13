@@ -152,4 +152,3 @@ class SourceValidationError(IngestionError):
         if self.reason:
             parts.append(f"reason: {self.reason}")
         return " - ".join(parts)
-

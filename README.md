@@ -44,8 +44,9 @@ This framework allows you to reproduce the research and create query-fanout-sess
 2. **Identify** request bursts using temporal bundling with the 100ms window
 3. **Refine** sessions with MIBCS collision detection — splits accidentally merged queries
    using graph-based semantic analysis
-4. **Report** Query Fan-Out Sessions in multi-sheet Excel workbooks with KPIs, URL-level
-   performance, daily trends, and sitemap freshness
+4. **Report** Query Fan-Out Sessions in multi-sheet Excel workbooks — sessions, URL-level
+   performance, daily KPIs, sitemap freshness coverage, URL co-occurrence, and decay trends;
+   or query directly via 11 pre-built SQLite analytical views
 
 ## Key Features of the Open Source Release
 
@@ -56,8 +57,13 @@ This framework allows you to reproduce the research and create query-fanout-sess
 - **Reproducible experiments**: Configurable parameters with hold-out validation
 - **8+ ingestion providers**: Modular plugin architecture — add new CDN providers in one class
 - **Multi-domain support**: Per-domain SQLite databases with domain column throughout
-- **Multi-sheet Excel reporting**: Sessions, URL performance, daily KPIs, sitemap freshness
-- **Sitemap freshness tracking**: URL coverage analysis and decay rate monitoring
+- **Multi-sheet Excel reporting**: Full workbooks — sessions, URL performance, daily KPIs,
+  sitemap freshness, URL co-occurrence, decay trends, and raw requests; configurable per export
+- **Sitemap freshness tracking**: Fetch and parse XML sitemaps; track URL coverage by
+  `lastmod` month, decay rates, and what percentage of your sitemap LLMs are actually requesting
+- **11 pre-built SQLite analytical views**: From daily KPIs to URL co-occurrence and freshness decay
+- **Local BigQuery modes**: `local_bq_buffered` (SQLite → BigQuery) and
+  `local_bq_streaming` (in-memory → BigQuery) for cloud-ready local pipelines
 - **Database migration tooling**: Idempotent v1→v2 schema migration with dry-run support
 
 ## Enterprise: Managed Cloud Pipeline

@@ -1,9 +1,18 @@
-"""Monitoring module for pipeline health."""
+"""Pipeline monitoring module.
 
-from .retry_handler import RetryConfig, RetryHandler, with_retry
+Provides:
+- Retry handling with circuit breaker
+- Data quality checks (freshness, schema, duplicates) — backend-agnostic
+"""
+
+from .data_quality import DataQualityChecker
+from .retry_handler import RetryConfig
+from .retry_handler import RetryManager as RetryHandler
+from .retry_handler import with_retry
 
 __all__ = [
-    "RetryHandler",
     "RetryConfig",
+    "RetryHandler",
     "with_retry",
+    "DataQualityChecker",
 ]

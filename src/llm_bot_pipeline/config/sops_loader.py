@@ -4,12 +4,15 @@ SOPS-encrypted configuration loader.
 Supports loading secrets from SOPS-encrypted YAML files.
 """
 
+import logging
 import os
 import subprocess
 from pathlib import Path
 from typing import Any, Optional
 
 import yaml
+
+logger = logging.getLogger(__name__)
 
 
 def decrypt_sops_file(file_path: Path) -> dict[str, Any]:
@@ -35,8 +38,14 @@ def decrypt_sops_file(file_path: Path) -> dict[str, Any]:
             capture_output=True,
             text=True,
             check=True,
+            timeout=30,
         )
         return yaml.safe_load(result.stdout)
+    except subprocess.TimeoutExpired:
+        raise RuntimeError(
+            f"SOPS decryption timed out after 30s for {file_path}. "
+            "Check KMS/age key availability."
+        )
     except subprocess.CalledProcessError as e:
         raise RuntimeError(f"SOPS decryption failed: {e.stderr}") from e
     except FileNotFoundError:
@@ -74,7 +83,7 @@ def load_config(
         except RuntimeError as e:
             if not fallback_to_env:
                 raise
-            print(f"⚠ SOPS decryption failed, falling back to env vars: {e}")
+            logger.warning("⚠ SOPS decryption failed, falling back to env vars: %s", e)
 
     # Fall back to environment variables
     if fallback_to_env:
@@ -101,7 +110,12 @@ def check_sops_installed() -> bool:
             ["sops", "--version"],
             capture_output=True,
             check=True,
+            timeout=10,
         )
         return True
-    except (subprocess.CalledProcessError, FileNotFoundError):
+    except (
+        subprocess.CalledProcessError,
+        FileNotFoundError,
+        subprocess.TimeoutExpired,
+    ):
         return False

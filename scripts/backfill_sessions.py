@@ -26,7 +26,7 @@ import argparse
 import logging
 import sys
 from dataclasses import dataclass, field
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -39,6 +39,7 @@ from llm_bot_pipeline.config import OPTIMAL_WINDOW_MS
 from llm_bot_pipeline.pipeline import setup_logging
 from llm_bot_pipeline.reporting import SessionAggregator
 from llm_bot_pipeline.storage import get_backend
+from llm_bot_pipeline.utils.date_utils import parse_date
 
 logger = logging.getLogger(__name__)
 
@@ -74,16 +75,6 @@ class DayResult:
     low_confidence: int = 0
     skipped: bool = False
     error: Optional[str] = None
-
-
-def parse_date(date_str: str) -> date:
-    """Parse date string in YYYY-MM-DD format."""
-    try:
-        return datetime.strptime(date_str, "%Y-%m-%d").date()
-    except ValueError:
-        raise argparse.ArgumentTypeError(
-            f"Invalid date format: {date_str}. Use YYYY-MM-DD"
-        )
 
 
 def get_dates_with_sessions(backend, start_date: date, end_date: date) -> set:
@@ -257,7 +248,7 @@ def run_backfill(
     Returns:
         BackfillResult with overall statistics
     """
-    started_at = datetime.now()
+    started_at = datetime.now(timezone.utc)
 
     result = BackfillResult(
         success=False,
@@ -354,7 +345,7 @@ def run_backfill(
     finally:
         backend.close()
 
-    result.duration_seconds = (datetime.now() - started_at).total_seconds()
+    result.duration_seconds = (datetime.now(timezone.utc) - started_at).total_seconds()
     return result
 
 

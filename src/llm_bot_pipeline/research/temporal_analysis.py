@@ -3,20 +3,22 @@ Temporal analysis for query fan-out bundling.
 
 Provides tools for analyzing inter-request time deltas and identifying
 natural clustering boundaries in LLM bot request patterns.
+
+Includes EnrichedBundle for fingerprint analysis with IP/request attributes.
 """
 
+import ipaddress
 import logging
 import sqlite3
 import uuid
+from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 import numpy as np
 import pandas as pd
-
-from ..storage.sqlite_backend import VALID_TABLES
 
 logger = logging.getLogger(__name__)
 
@@ -52,9 +54,279 @@ class Bundle:
         return (self.end_time - self.start_time).total_seconds() * 1000
 
 
+# =============================================================================
+# IP/Subnet Utility Functions
+# =============================================================================
+
+
+def get_subnet_24(ip: Optional[str]) -> Optional[str]:
+    """
+    Get /24 subnet for an IP address.
+
+    Args:
+        ip: IP address string (IPv4 or IPv6)
+
+    Returns:
+        Subnet string (e.g., "192.168.1.0/24") or None if invalid
+    """
+    if not ip:
+        return None
+
+    try:
+        addr = ipaddress.ip_address(ip)
+        if isinstance(addr, ipaddress.IPv4Address):
+            # IPv4: /24 subnet
+            network = ipaddress.ip_network(f"{ip}/24", strict=False)
+            return str(network)
+        else:
+            # IPv6: /48 subnet (equivalent granularity)
+            network = ipaddress.ip_network(f"{ip}/48", strict=False)
+            return str(network)
+    except ValueError:
+        return None
+
+
+def compute_ip_homogeneity(ips: list[Optional[str]]) -> float:
+    """
+    Compute IP homogeneity score for a list of IPs.
+
+    Returns 1.0 if all requests come from the same IP (or fewer than 2 IPs).
+    Returns lower values for more diverse IP sets.
+
+    Formula: 1.0 - (unique_ips - 1) / request_count
+    This gives 1.0 for single IP, approaches 0 for max diversity.
+
+    Args:
+        ips: List of IP addresses (may contain None)
+
+    Returns:
+        Homogeneity score from 0.0 to 1.0
+    """
+    # Filter out None values
+    valid_ips = [ip for ip in ips if ip]
+
+    if len(valid_ips) <= 1:
+        return 1.0
+
+    unique_count = len(set(valid_ips))
+    total_count = len(valid_ips)
+
+    if unique_count == 1:
+        return 1.0
+
+    # Score decreases as unique IPs increase relative to total
+    # unique_count=2, total=10 -> 1.0 - 1/10 = 0.9
+    # unique_count=10, total=10 -> 1.0 - 9/10 = 0.1
+    return 1.0 - (unique_count - 1) / total_count
+
+
+def compute_categorical_consistency(values: list[Any]) -> float:
+    """
+    Compute consistency score for categorical values.
+
+    Uses the proportion of the most common value.
+
+    Args:
+        values: List of categorical values
+
+    Returns:
+        Consistency score from 0.0 to 1.0
+    """
+    if not values:
+        return 1.0
+
+    # Filter out None values
+    valid_values = [v for v in values if v is not None]
+    if not valid_values:
+        return 1.0
+
+    counts = Counter(valid_values)
+    most_common_count = counts.most_common(1)[0][1]
+
+    return most_common_count / len(valid_values)
+
+
+def compute_numerical_consistency(values: list[float]) -> float:
+    """
+    Compute consistency score for numerical values.
+
+    Uses inverse coefficient of variation (CV = std/mean).
+    Returns 1.0 for perfectly consistent values, lower for more variation.
+
+    Args:
+        values: List of numerical values
+
+    Returns:
+        Consistency score from 0.0 to 1.0
+    """
+    # Filter out None values
+    valid_values = [v for v in values if v is not None]
+
+    if len(valid_values) <= 1:
+        return 1.0
+
+    mean_val = np.mean(valid_values)
+    if mean_val == 0:
+        return 1.0 if np.std(valid_values) == 0 else 0.0
+
+    cv = np.std(valid_values) / abs(mean_val)
+
+    # Convert CV to consistency score (CV=0 -> 1.0, CV=1 -> 0.5, CV=2 -> 0.33)
+    return 1.0 / (1.0 + cv)
+
+
+@dataclass
+class EnrichedBundle(Bundle):
+    """
+    A temporal bundle with fingerprint metadata for IP/request analysis.
+
+    Extends Bundle with additional fields for analyzing request patterns
+    and detecting anomalies in IP distribution, response statuses, etc.
+    """
+
+    # Fingerprint fields (all have defaults for dataclass inheritance)
+    client_ips: list[str] = field(default_factory=list)
+    response_statuses: list[int] = field(default_factory=list)
+    bot_scores: list[float] = field(default_factory=list)
+    countries: list[str] = field(default_factory=list)
+    bot_tags: list[str] = field(default_factory=list)
+    bot_name: Optional[str] = None
+
+    @property
+    def unique_ips(self) -> set[str]:
+        """Get set of unique IP addresses in this bundle."""
+        return set(ip for ip in self.client_ips if ip)
+
+    @property
+    def unique_subnets_24(self) -> set[str]:
+        """Get set of unique /24 subnets in this bundle."""
+        subnets = set()
+        for ip in self.client_ips:
+            subnet = get_subnet_24(ip)
+            if subnet:
+                subnets.add(subnet)
+        return subnets
+
+    @property
+    def ip_homogeneity(self) -> float:
+        """
+        Compute IP homogeneity score.
+
+        Returns 1.0 if all requests come from the same IP.
+        Returns lower values for more diverse IP sets.
+        """
+        return compute_ip_homogeneity(self.client_ips)
+
+    @property
+    def subnet_homogeneity(self) -> float:
+        """
+        Compute subnet homogeneity score.
+
+        Similar to ip_homogeneity but at /24 subnet level.
+        """
+        subnets = [get_subnet_24(ip) for ip in self.client_ips]
+        return compute_ip_homogeneity(subnets)
+
+    def response_status_consistency(self) -> float:
+        """
+        Compute consistency of response statuses.
+
+        Returns 1.0 if all responses have the same status.
+        """
+        return compute_categorical_consistency(self.response_statuses)
+
+    def bot_score_consistency(self) -> float:
+        """
+        Compute consistency of bot scores.
+
+        Uses coefficient of variation to measure spread.
+        """
+        return compute_numerical_consistency(self.bot_scores)
+
+    def country_consistency(self) -> float:
+        """
+        Compute consistency of request countries.
+
+        Returns 1.0 if all requests come from the same country.
+        """
+        return compute_categorical_consistency(self.countries)
+
+    def bot_tags_consistency(self) -> float:
+        """
+        Compute consistency of bot tags.
+
+        Returns 1.0 if all requests have the same tags.
+        """
+        return compute_categorical_consistency(self.bot_tags)
+
+    def get_fingerprint_summary(self) -> dict:
+        """
+        Get summary of all fingerprint metrics.
+
+        Returns:
+            Dictionary with all fingerprint analysis metrics
+        """
+        return {
+            "unique_ip_count": len(self.unique_ips),
+            "unique_subnet_count": len(self.unique_subnets_24),
+            "ip_homogeneity": self.ip_homogeneity,
+            "subnet_homogeneity": self.subnet_homogeneity,
+            "response_status_consistency": self.response_status_consistency(),
+            "bot_score_consistency": self.bot_score_consistency(),
+            "country_consistency": self.country_consistency(),
+            "bot_tags_consistency": self.bot_tags_consistency(),
+            "unique_countries": list(set(c for c in self.countries if c)),
+            "unique_statuses": list(set(self.response_statuses)),
+            "unique_bot_tags": list(set(t for t in self.bot_tags if t)),
+            "bot_name": self.bot_name,
+        }
+
+    @classmethod
+    def from_bundle(
+        cls,
+        bundle: Bundle,
+        client_ips: Optional[list[str]] = None,
+        response_statuses: Optional[list[int]] = None,
+        bot_scores: Optional[list[float]] = None,
+        countries: Optional[list[str]] = None,
+        bot_tags: Optional[list[str]] = None,
+        bot_name: Optional[str] = None,
+    ) -> "EnrichedBundle":
+        """
+        Create EnrichedBundle from an existing Bundle.
+
+        Args:
+            bundle: Source Bundle object
+            client_ips: List of client IP addresses
+            response_statuses: List of HTTP response status codes
+            bot_scores: List of bot scores
+            countries: List of country codes
+            bot_tags: List of bot tags
+            bot_name: Bot name (e.g., "ChatGPT-User")
+
+        Returns:
+            EnrichedBundle with all Bundle fields plus fingerprint data
+        """
+        return cls(
+            bundle_id=bundle.bundle_id,
+            start_time=bundle.start_time,
+            end_time=bundle.end_time,
+            request_count=bundle.request_count,
+            bot_provider=bundle.bot_provider,
+            urls=bundle.urls,
+            request_indices=bundle.request_indices,
+            client_ips=client_ips or [],
+            response_statuses=response_statuses or [],
+            bot_scores=bot_scores or [],
+            countries=countries or [],
+            bot_tags=bot_tags or [],
+            bot_name=bot_name,
+        )
+
+
 def compute_inter_request_deltas(
     df: pd.DataFrame,
-    timestamp_col: str = "request_timestamp",
+    timestamp_col: str = "datetime",
     group_by: Optional[str] = "bot_provider",
 ) -> pd.DataFrame:
     """
@@ -62,7 +334,7 @@ def compute_inter_request_deltas(
 
     Args:
         df: DataFrame with request data
-        timestamp_col: Name of timestamp column (default: request_timestamp)
+        timestamp_col: Name of timestamp column
         group_by: Column to group by (e.g., 'bot_provider'), or None for global
 
     Returns:
@@ -71,7 +343,7 @@ def compute_inter_request_deltas(
     df = df.copy()
 
     # Ensure timestamp is datetime
-    if df[timestamp_col].dtype == "object":
+    if not pd.api.types.is_datetime64_any_dtype(df[timestamp_col]):
         df[timestamp_col] = pd.to_datetime(df[timestamp_col], format="ISO8601")
 
     # Sort by timestamp
@@ -208,8 +480,8 @@ def find_natural_gaps(
 def create_temporal_bundles(
     df: pd.DataFrame,
     window_ms: float,
-    timestamp_col: str = "request_timestamp",
-    url_col: str = "request_uri",
+    timestamp_col: str = "datetime",
+    url_col: str = "url",
     group_by: Optional[str] = "bot_provider",
 ) -> list[Bundle]:
     """
@@ -218,8 +490,8 @@ def create_temporal_bundles(
     Args:
         df: DataFrame with request data
         window_ms: Maximum time window in milliseconds
-        timestamp_col: Name of timestamp column (default: request_timestamp)
-        url_col: Name of URL column (default: request_uri)
+        timestamp_col: Name of timestamp column
+        url_col: Name of URL column
         group_by: Column to group by (e.g., 'bot_provider'), or None for global
 
     Returns:
@@ -228,7 +500,7 @@ def create_temporal_bundles(
     df = df.copy()
 
     # Ensure timestamp is datetime
-    if df[timestamp_col].dtype == "object":
+    if not pd.api.types.is_datetime64_any_dtype(df[timestamp_col]):
         df[timestamp_col] = pd.to_datetime(df[timestamp_col], format="ISO8601")
 
     # Sort by timestamp
@@ -388,16 +660,16 @@ class TemporalAnalyzer:
 
     def __init__(
         self,
-        timestamp_col: str = "request_timestamp",
-        url_col: str = "request_uri",
+        timestamp_col: str = "datetime",
+        url_col: str = "url",
         group_by: str = "bot_provider",
     ):
         """
         Initialize temporal analyzer.
 
         Args:
-            timestamp_col: Name of timestamp column (default: request_timestamp)
-            url_col: Name of URL column (default: request_uri)
+            timestamp_col: Name of timestamp column
+            url_col: Name of URL column
             group_by: Column to group by for per-provider analysis
         """
         self.timestamp_col = timestamp_col
@@ -419,7 +691,7 @@ class TemporalAnalyzer:
         self._df = df.copy()
 
         # Ensure timestamp is datetime
-        if self._df[self.timestamp_col].dtype == "object":
+        if not pd.api.types.is_datetime64_any_dtype(self._df[self.timestamp_col]):
             self._df[self.timestamp_col] = pd.to_datetime(
                 self._df[self.timestamp_col], format="ISO8601"
             )
@@ -452,8 +724,7 @@ class TemporalAnalyzer:
         db_path: str,
         table_name: str = "bot_requests_daily",
     ) -> "TemporalAnalyzer":
-        """
-        Load request data from SQLite database.
+        """Load request data from SQLite database.
 
         Args:
             db_path: Path to SQLite database file
@@ -461,16 +732,13 @@ class TemporalAnalyzer:
 
         Returns:
             self for method chaining
-
-        Raises:
-            FileNotFoundError: If database file doesn't exist
-            ValueError: If table name is not in allowed list
         """
+        from ..config.constants import VALID_TABLE_NAMES as VALID_TABLES
+
         path = Path(db_path)
         if not path.exists():
             raise FileNotFoundError(f"Database not found: {db_path}")
 
-        # Validate table name to prevent SQL injection
         if table_name not in VALID_TABLES:
             raise ValueError(
                 f"Invalid table name: '{table_name}'. "

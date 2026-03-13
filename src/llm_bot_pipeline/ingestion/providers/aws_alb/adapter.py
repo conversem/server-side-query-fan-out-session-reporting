@@ -27,11 +27,10 @@ from pathlib import Path
 from typing import Any, Iterator, Optional, Union
 from urllib.parse import urlparse
 
-from llm_bot_pipeline.ingestion.file_utils import open_file_auto_decompress
-
 from ....utils.bot_classifier import classify_bot
 from ...base import IngestionAdapter, IngestionRecord, IngestionSource
 from ...exceptions import ParseError, SourceValidationError
+from ...file_utils import open_file_auto_decompress
 from ...registry import IngestionRegistry
 from ...security import validate_path_safe
 
@@ -568,7 +567,7 @@ class ALBAdapter(IngestionAdapter):
 
             return (method, host, path, query_string, protocol)
         except Exception:
-            # If URL parsing fails, treat as path
+            logger.debug("URL parsing failed for %s", url, exc_info=True)
             return (
                 method,
                 None,

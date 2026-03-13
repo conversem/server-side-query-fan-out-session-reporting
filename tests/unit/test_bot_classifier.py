@@ -20,123 +20,94 @@ from llm_bot_pipeline.utils.bot_classifier import (
 class TestClassifyBot:
     """Tests for classify_bot function."""
 
-    def test_gptbot_training(self):
-        """GPTBot should be classified as OpenAI training bot."""
-        user_agent = "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; GPTBot/1.0; +https://openai.com/gptbot)"
+    @pytest.mark.parametrize(
+        "user_agent,bot_name,bot_provider,bot_category",
+        [
+            (
+                "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; GPTBot/1.0; +https://openai.com/gptbot)",
+                "GPTBot",
+                "OpenAI",
+                "training",
+            ),
+            (
+                "Mozilla/5.0 (compatible; ChatGPT-User/1.0; +https://openai.com/bot)",
+                "ChatGPT-User",
+                "OpenAI",
+                "user_request",
+            ),
+            (
+                "Mozilla/5.0 (compatible; ClaudeBot/1.0; +https://anthropic.com)",
+                "ClaudeBot",
+                "Anthropic",
+                "training",
+            ),
+            (
+                "Mozilla/5.0 (compatible; Claude-User/1.0)",
+                "Claude-User",
+                "Anthropic",
+                "user_request",
+            ),
+            (
+                "Mozilla/5.0 (compatible; Google-Extended)",
+                "Google-Extended",
+                "Google",
+                "training",
+            ),
+            (
+                "Mozilla/5.0 (compatible; PerplexityBot/1.0)",
+                "PerplexityBot",
+                "Perplexity",
+                "search",
+            ),
+            (
+                "Mozilla/5.0 (compatible; bingbot/2.0; +http://www.bing.com/bingbot.htm)",
+                "bingbot",
+                "Microsoft",
+                "search",
+            ),
+            (
+                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Applebot-Extended/0.1",
+                "Applebot-Extended",
+                "Apple",
+                "training",
+            ),
+            (
+                "Mozilla/5.0 (compatible; OAI-SearchBot/1.0)",
+                "OAI-SearchBot",
+                "OpenAI",
+                "search",
+            ),
+            (
+                "Mozilla/5.0 (compatible; Claude-SearchBot/1.0)",
+                "Claude-SearchBot",
+                "Anthropic",
+                "search",
+            ),
+        ],
+    )
+    def test_bot_classification(self, user_agent, bot_name, bot_provider, bot_category):
+        """User-agent should be classified with expected bot name, provider, category."""
         result = classify_bot(user_agent)
-
         assert result is not None
-        assert result.bot_name == "GPTBot"
-        assert result.bot_provider == "OpenAI"
-        assert result.bot_category == "training"
-
-    def test_chatgpt_user_request(self):
-        """ChatGPT-User should be classified as OpenAI user_request bot."""
-        user_agent = (
-            "Mozilla/5.0 (compatible; ChatGPT-User/1.0; +https://openai.com/bot)"
-        )
-        result = classify_bot(user_agent)
-
-        assert result is not None
-        assert result.bot_name == "ChatGPT-User"
-        assert result.bot_provider == "OpenAI"
-        assert result.bot_category == "user_request"
-
-    def test_claudebot_training(self):
-        """ClaudeBot should be classified as Anthropic training bot."""
-        user_agent = "Mozilla/5.0 (compatible; ClaudeBot/1.0; +https://anthropic.com)"
-        result = classify_bot(user_agent)
-
-        assert result is not None
-        assert result.bot_name == "ClaudeBot"
-        assert result.bot_provider == "Anthropic"
-        assert result.bot_category == "training"
-
-    def test_claude_user_request(self):
-        """Claude-User should be classified as Anthropic user_request bot."""
-        user_agent = "Mozilla/5.0 (compatible; Claude-User/1.0)"
-        result = classify_bot(user_agent)
-
-        assert result is not None
-        assert result.bot_name == "Claude-User"
-        assert result.bot_provider == "Anthropic"
-        assert result.bot_category == "user_request"
-
-    def test_google_extended_training(self):
-        """Google-Extended should be classified as Google training bot."""
-        user_agent = "Mozilla/5.0 (compatible; Google-Extended)"
-        result = classify_bot(user_agent)
-
-        assert result is not None
-        assert result.bot_name == "Google-Extended"
-        assert result.bot_provider == "Google"
-        assert result.bot_category == "training"
-
-    def test_perplexitybot_user_request(self):
-        """PerplexityBot should be classified as Perplexity user_request bot."""
-        user_agent = "Mozilla/5.0 (compatible; PerplexityBot/1.0)"
-        result = classify_bot(user_agent)
-
-        assert result is not None
-        assert result.bot_name == "PerplexityBot"
-        assert result.bot_provider == "Perplexity"
-        assert result.bot_category == "user_request"
-
-    def test_bingbot_search_engine(self):
-        """bingbot should be classified as Microsoft user_request bot."""
-        user_agent = (
-            "Mozilla/5.0 (compatible; bingbot/2.0; +http://www.bing.com/bingbot.htm)"
-        )
-        result = classify_bot(user_agent)
-
-        assert result is not None
-        assert result.bot_name == "bingbot"
-        assert result.bot_provider == "Microsoft"
-        assert result.bot_category == "search_engine"
-
-    def test_applebot_extended_training(self):
-        """Applebot-Extended should be classified as Apple training bot."""
-        user_agent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Applebot-Extended/0.1"
-        result = classify_bot(user_agent)
-
-        assert result is not None
-        assert result.bot_name == "Applebot-Extended"
-        assert result.bot_provider == "Apple"
-        assert result.bot_category == "training"
-
-    def test_oai_searchbot_user_request(self):
-        """OAI-SearchBot should be classified as OpenAI user_request bot."""
-        user_agent = "Mozilla/5.0 (compatible; OAI-SearchBot/1.0)"
-        result = classify_bot(user_agent)
-
-        assert result is not None
-        assert result.bot_name == "OAI-SearchBot"
-        assert result.bot_provider == "OpenAI"
-        assert result.bot_category == "user_request"
-
-    def test_claude_searchbot_user_request(self):
-        """Claude-SearchBot should be classified as Anthropic user_request bot."""
-        user_agent = "Mozilla/5.0 (compatible; Claude-SearchBot/1.0)"
-        result = classify_bot(user_agent)
-
-        assert result is not None
-        assert result.bot_name == "Claude-SearchBot"
-        assert result.bot_provider == "Anthropic"
-        assert result.bot_category == "user_request"
+        assert result.bot_name == bot_name
+        assert result.bot_provider == bot_provider
+        assert result.bot_category == bot_category
 
 
 class TestUnknownBots:
     """Tests for handling unknown or invalid user-agents."""
 
-    def test_regular_browser_returns_none(self):
-        """Regular browser user-agent should return None."""
-        user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0"
+    @pytest.mark.parametrize(
+        "user_agent",
+        [
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0",
+            "",
+            "Mozilla/5.0 (compatible; SomeOtherBot/1.0)",
+        ],
+    )
+    def test_returns_none(self, user_agent):
+        """Unknown or invalid user-agent should return None."""
         result = classify_bot(user_agent)
-        assert result is None
-
-    def test_empty_string_returns_none(self):
-        """Empty string should return None."""
-        result = classify_bot("")
         assert result is None
 
     def test_none_returns_none(self):
@@ -144,29 +115,22 @@ class TestUnknownBots:
         result = classify_bot(None)
         assert result is None
 
-    def test_unknown_bot_returns_none(self):
-        """Unknown bot should return None."""
-        user_agent = "Mozilla/5.0 (compatible; SomeOtherBot/1.0)"
-        result = classify_bot(user_agent)
-        assert result is None
-
 
 class TestCaseInsensitiveMatching:
     """Tests for case-insensitive bot matching."""
 
-    def test_lowercase_gptbot(self):
+    @pytest.mark.parametrize(
+        "user_agent,expected_bot_name",
+        [
+            ("Mozilla/5.0 (compatible; gptbot/1.0)", "GPTBot"),
+            ("Mozilla/5.0 (compatible; BINGBOT/2.0)", "bingbot"),
+        ],
+    )
+    def test_case_insensitive_matching(self, user_agent, expected_bot_name):
         """Bot names should match case-insensitively."""
-        user_agent = "Mozilla/5.0 (compatible; gptbot/1.0)"
         result = classify_bot(user_agent)
         assert result is not None
-        assert result.bot_name == "GPTBot"
-
-    def test_uppercase_bingbot(self):
-        """bingbot should match even in uppercase."""
-        user_agent = "Mozilla/5.0 (compatible; BINGBOT/2.0)"
-        result = classify_bot(user_agent)
-        assert result is not None
-        assert result.bot_name == "bingbot"
+        assert result.bot_name == expected_bot_name
 
 
 class TestClassifyBotDict:
@@ -194,25 +158,28 @@ class TestClassifyBotDict:
 class TestBotCategoryHelpers:
     """Tests for is_training_bot and is_user_request_bot."""
 
-    def test_is_training_bot_true(self):
-        """GPTBot should be identified as training bot."""
-        assert is_training_bot("GPTBot/1.0") is True
+    @pytest.mark.parametrize(
+        "user_agent,expected",
+        [
+            ("GPTBot/1.0", True),
+            ("ChatGPT-User/1.0", False),
+            ("Chrome/120", False),
+        ],
+    )
+    def test_is_training_bot(self, user_agent, expected):
+        """is_training_bot should return expected result for user-agent."""
+        assert is_training_bot(user_agent) is expected
 
-    def test_is_training_bot_false_for_user_request(self):
-        """ChatGPT-User should not be identified as training bot."""
-        assert is_training_bot("ChatGPT-User/1.0") is False
-
-    def test_is_training_bot_false_for_unknown(self):
-        """Unknown bot should not be identified as training bot."""
-        assert is_training_bot("Chrome/120") is False
-
-    def test_is_user_request_bot_true(self):
-        """ChatGPT-User should be identified as user_request bot."""
-        assert is_user_request_bot("ChatGPT-User/1.0") is True
-
-    def test_is_user_request_bot_false_for_training(self):
-        """GPTBot should not be identified as user_request bot."""
-        assert is_user_request_bot("GPTBot/1.0") is False
+    @pytest.mark.parametrize(
+        "user_agent,expected",
+        [
+            ("ChatGPT-User/1.0", True),
+            ("GPTBot/1.0", False),
+        ],
+    )
+    def test_is_user_request_bot(self, user_agent, expected):
+        """is_user_request_bot should return expected result for user-agent."""
+        assert is_user_request_bot(user_agent) is expected
 
 
 class TestBotNameHelpers:
@@ -234,8 +201,10 @@ class TestBotNameHelpers:
         user_bots = get_bot_names_by_category("user_request")
         assert "ChatGPT-User" in user_bots
         assert "Claude-User" in user_bots
-        assert "PerplexityBot" in user_bots
-        # bingbot is search_engine, not user_request
+        assert "Perplexity-User" in user_bots
+        # PerplexityBot is search, not user_request
+        assert "PerplexityBot" not in user_bots
+        # bingbot is search, not user_request
         assert "bingbot" not in user_bots
         # Training bots should not be in user_request
         assert "GPTBot" not in user_bots

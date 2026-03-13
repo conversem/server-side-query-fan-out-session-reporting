@@ -32,12 +32,6 @@ from llm_bot_pipeline.ingestion.providers import (  # noqa: F401
 )
 
 
-@pytest.fixture
-def fixtures_dir() -> Path:
-    """Return path to test fixtures directory."""
-    return Path(__file__).parent.parent / "fixtures" / "ingestion"
-
-
 class TestUniversalAdapter:
     """Tests for UniversalAdapter."""
 

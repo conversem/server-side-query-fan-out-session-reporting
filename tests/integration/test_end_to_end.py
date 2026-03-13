@@ -9,6 +9,12 @@ Tests the full flow:
 5. Dashboard query execution
 
 This validates that all components work together correctly.
+
+Stage-specific tests can be run individually via markers:
+  pytest -m ingestion
+  pytest -m transform
+  pytest -m aggregation
+  pytest -m query
 """
 
 from datetime import date, timedelta
@@ -30,63 +36,115 @@ class TestFullPipelineFlow:
         """Create a dedicated database path for E2E tests."""
         return tmp_path / "e2e_test.db"
 
-    def test_complete_pipeline_flow(self, e2e_db_path):
-        """
-        Test complete flow: ingest → transform → aggregate → query.
-
-        This is the primary E2E test validating all components.
-        """
-        from llm_bot_pipeline.pipeline import LocalPipeline
-        from llm_bot_pipeline.reporting import (
-            LocalDashboardQueries,
-            LocalReportingAggregator,
-        )
-        from llm_bot_pipeline.storage import get_backend
-        from tests.integration.conftest import generate_sample_records
-
-        # Setup dates
+    @pytest.fixture
+    def e2e_date_range(self):
+        """Standard date range for E2E stage tests."""
         end_date = date.today() - timedelta(days=1)
         start_date = end_date - timedelta(days=2)
+        return start_date, end_date
 
-        # Step 1: Generate sample data
-        sample_records = generate_sample_records(
+    @pytest.fixture
+    def e2e_sample_records(self, e2e_date_range):
+        """Sample records for E2E stage tests."""
+        from tests.conftest import generate_sample_records
+
+        start_date, end_date = e2e_date_range
+        return generate_sample_records(
             num_records=200,
             start_date=start_date,
             end_date=end_date,
         )
-        assert len(sample_records) == 200
 
-        # Step 2: Ingest raw data
+    @pytest.fixture
+    def ingested_db_path(self, tmp_path: Path, e2e_date_range, e2e_sample_records):
+        """DB with raw data ingested (output of ingestion stage)."""
+        from llm_bot_pipeline.storage import get_backend
+
+        path = tmp_path / "e2e_ingested.db"
+        backend = get_backend("sqlite", db_path=path)
+        backend.initialize()
+        backend.insert_raw_records(e2e_sample_records)
+        backend.close()
+        return path
+
+    @pytest.fixture
+    def transformed_db_path(self, ingested_db_path, e2e_date_range):
+        """DB with raw + transformed data (output of transform stage)."""
+        from llm_bot_pipeline.pipeline import LocalPipeline
+
+        start_date, end_date = e2e_date_range
+        pipeline = LocalPipeline(backend_type="sqlite", db_path=ingested_db_path)
+        pipeline.initialize()
+        pipeline.run(start_date, end_date, mode="full")
+        pipeline.close()
+        return ingested_db_path
+
+    @pytest.fixture
+    def aggregated_db_path(self, transformed_db_path, e2e_date_range):
+        """DB with raw + transformed + aggregated data (output of aggregation stage)."""
+        from llm_bot_pipeline.reporting import LocalReportingAggregator
+
+        start_date, end_date = e2e_date_range
+        aggregator = LocalReportingAggregator(
+            backend_type="sqlite", db_path=transformed_db_path
+        )
+        aggregator.initialize()
+        aggregator.aggregate_all(start_date, end_date)
+        aggregator.close()
+        return transformed_db_path
+
+    @pytest.mark.ingestion
+    def test_ingestion_stage(self, e2e_db_path, e2e_date_range, e2e_sample_records):
+        """Test ingestion stage: generate sample data and ingest raw records."""
+        from llm_bot_pipeline.storage import get_backend
+
+        assert len(e2e_sample_records) == 200
+
         backend = get_backend("sqlite", db_path=e2e_db_path)
         backend.initialize()
-        rows_ingested = backend.insert_raw_records(sample_records)
+        rows_ingested = backend.insert_raw_records(e2e_sample_records)
         assert rows_ingested == 200
         backend.close()
 
-        # Step 3: Run ETL pipeline
-        pipeline = LocalPipeline(backend_type="sqlite", db_path=e2e_db_path)
-        pipeline.initialize()
+    @pytest.mark.transform
+    def test_transform_stage(self, ingested_db_path, e2e_date_range):
+        """Test transform stage: ETL pipeline on pre-ingested data."""
+        from llm_bot_pipeline.pipeline import LocalPipeline
 
+        start_date, end_date = e2e_date_range
+        pipeline = LocalPipeline(backend_type="sqlite", db_path=ingested_db_path)
+        pipeline.initialize()
         result = pipeline.run(start_date, end_date, mode="full")
         assert result.success
         assert result.raw_rows == 200
         assert result.transformed_rows > 0
         pipeline.close()
 
-        # Step 4: Run aggregations
+    @pytest.mark.aggregation
+    def test_aggregation_stage(self, transformed_db_path, e2e_date_range):
+        """Test aggregation stage: build aggregations on pre-transformed data."""
+        from llm_bot_pipeline.reporting import LocalReportingAggregator
+
+        start_date, end_date = e2e_date_range
         aggregator = LocalReportingAggregator(
-            backend_type="sqlite", db_path=e2e_db_path
+            backend_type="sqlite", db_path=transformed_db_path
         )
         aggregator.initialize()
-
         agg_results = aggregator.aggregate_all(start_date, end_date)
         assert all(r.success for r in agg_results)
         assert agg_results[0].rows_inserted > 0  # daily_summary
         assert agg_results[1].rows_inserted > 0  # url_performance
         aggregator.close()
 
-        # Step 5: Run dashboard queries
-        dashboard = LocalDashboardQueries(backend_type="sqlite", db_path=e2e_db_path)
+    @pytest.mark.query
+    def test_query_stage(self, aggregated_db_path, e2e_date_range):
+        """Test query stage: dashboard queries on pre-aggregated data."""
+        from llm_bot_pipeline.reporting import LocalDashboardQueries
+
+        start_date, end_date = e2e_date_range
+        dashboard = LocalDashboardQueries(
+            backend_type="sqlite", db_path=aggregated_db_path
+        )
         dashboard.initialize()
 
         summary = dashboard.get_executive_summary(days=7)
@@ -107,7 +165,7 @@ class TestFullPipelineFlow:
         from llm_bot_pipeline.pipeline import LocalPipeline
         from llm_bot_pipeline.reporting import LocalReportingAggregator
         from llm_bot_pipeline.storage import get_backend
-        from tests.integration.conftest import generate_sample_records
+        from tests.conftest import generate_sample_records
 
         end_date = date.today() - timedelta(days=1)
         start_date = end_date - timedelta(days=2)
@@ -158,7 +216,7 @@ class TestMultiDayProcessing:
         """Should correctly process a full week of data."""
         from llm_bot_pipeline.pipeline import LocalPipeline
         from llm_bot_pipeline.storage import get_backend
-        from tests.integration.conftest import generate_sample_records
+        from tests.conftest import generate_sample_records
 
         db_path = tmp_path / "week_test.db"
 
@@ -203,7 +261,7 @@ class TestBotClassificationIntegration:
         """All ingested records should be classified in transformation."""
         from llm_bot_pipeline.pipeline import LocalPipeline
         from llm_bot_pipeline.storage import get_backend
-        from tests.integration.conftest import generate_sample_records
+        from tests.conftest import generate_sample_records
 
         db_path = tmp_path / "classification_test.db"
 
@@ -228,13 +286,11 @@ class TestBotClassificationIntegration:
         pipeline.run(start_date, end_date, mode="full")
 
         # Check all records have bot classification
-        result = pipeline._backend.query(
-            """
+        result = pipeline._backend.query("""
             SELECT COUNT(*) as cnt 
             FROM bot_requests_daily 
             WHERE bot_name IS NULL OR bot_provider IS NULL
-            """
-        )
+            """)
 
         # All records should be classified (our sample data uses known bots)
         assert result[0]["cnt"] == 0
@@ -294,7 +350,7 @@ class TestPerformanceBaseline:
         import time
 
         from llm_bot_pipeline.storage import get_backend
-        from tests.integration.conftest import generate_sample_records
+        from tests.conftest import generate_sample_records
 
         db_path = tmp_path / "perf_test.db"
 
@@ -320,7 +376,7 @@ class TestPerformanceBaseline:
 
         from llm_bot_pipeline.pipeline import LocalPipeline
         from llm_bot_pipeline.storage import get_backend
-        from tests.integration.conftest import generate_sample_records
+        from tests.conftest import generate_sample_records
 
         db_path = tmp_path / "pipeline_perf_test.db"
 

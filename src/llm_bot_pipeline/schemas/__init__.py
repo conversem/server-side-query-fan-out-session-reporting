@@ -1,18 +1,18 @@
-"""Schemas for LLM bot traffic data storage."""
+"""Schemas for LLM bot traffic data storage.
+
+Provides both legacy column-dict definitions (SQLite-specific) and the
+neutral ``FieldDefinition`` / ``TableSchema`` system that converts to
+any backend format (SQLite DDL, BigQuery SchemaField, PyArrow).
+"""
 
 from .bundles import (
     QUERY_FANOUT_SESSIONS_COLUMNS,
     QueryFanoutSession,
     get_create_sessions_table_sql,
 )
-from .clean import (
-    CLEAN_BOT_REQUESTS_COLUMNS,
-    get_create_clean_table_sql,
-)
-from .raw import (
-    RAW_BOT_REQUESTS_COLUMNS,
-    get_create_raw_table_sql,
-)
+from .clean import CLEAN_BOT_REQUESTS_COLUMNS, get_create_clean_table_sql
+from .converters import FieldDefinition, FieldType, TableSchema
+from .raw import RAW_BOT_REQUESTS_COLUMNS, get_create_raw_table_sql
 from .reporting import (
     BOT_PROVIDER_SUMMARY_COLUMNS,
     DAILY_SUMMARY_COLUMNS,
@@ -23,6 +23,10 @@ from .reporting import (
 )
 
 __all__ = [
+    # Neutral schema converters
+    "FieldDefinition",
+    "FieldType",
+    "TableSchema",
     # Raw schema
     "RAW_BOT_REQUESTS_COLUMNS",
     "get_create_raw_table_sql",

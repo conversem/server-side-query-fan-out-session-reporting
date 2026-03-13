@@ -5,10 +5,11 @@ from .constants import (
     LLM_BOT_NAMES,
     OPTIMAL_WINDOW_MS,
     OUTPUT_FIELDS,
+    VALID_PROCESSING_MODES,
     WINDOW_50MS,
     WINDOW_100MS,
 )
-from .settings import Settings, clear_settings_cache, get_settings
+from .settings import ConfigurationError, Settings, clear_settings_cache, get_settings
 from .sops_loader import check_sops_installed, decrypt_sops_file, load_config
 
 __all__ = [
@@ -20,7 +21,10 @@ __all__ = [
     "BOT_CLASSIFICATION",
     "LLM_BOT_NAMES",
     "OUTPUT_FIELDS",
+    # Processing modes
+    "VALID_PROCESSING_MODES",
     # Settings
+    "ConfigurationError",
     "Settings",
     "get_settings",
     "clear_settings_cache",

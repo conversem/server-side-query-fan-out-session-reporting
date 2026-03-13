@@ -27,12 +27,6 @@ from llm_bot_pipeline.storage import get_backend
 from scripts.ingest_logs import convert_to_backend_record
 
 
-@pytest.fixture
-def fixtures_dir() -> Path:
-    """Return path to test fixtures directory."""
-    return Path(__file__).parent.parent / "fixtures" / "ingestion"
-
-
 class TestUniversalIngestionWorkflow:
     """Integration tests for universal adapter workflow."""
 
