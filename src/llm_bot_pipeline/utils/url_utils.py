@@ -87,8 +87,8 @@ def derive_session_name(url: str) -> str:
         return "homepage"
 
     # Replace hyphens, underscores, and dots with spaces
-    # Note: This deviates slightly from PRD spec which only removes extensions.
-    # The PRD approach has a bug where "v2.0-guide" becomes "v2" instead of "v2.0 guide".
+    # Note: This deviates slightly from the original spec which only removes extensions.
+    # The original approach has a bug where "v2.0-guide" becomes "v2" instead of "v2.0 guide".
     # This implementation fixes that by replacing dots with spaces first, then
     # intelligently removing only known file extensions.
     session_name = last_segment.replace("-", " ").replace("_", " ").replace(".", " ")

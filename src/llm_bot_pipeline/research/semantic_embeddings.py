@@ -49,7 +49,7 @@ def tokenize_url(url: str) -> str:
     """
     Tokenize a URL path into space-separated tokens.
 
-    Splits URL path by '/', '-', '_', '.' characters as specified in PRD.
+    Splits URL path by '/', '-', '_', '.' characters for token extraction.
     Also handles camelCase splitting for additional token extraction.
 
     Args:
@@ -77,7 +77,7 @@ def tokenize_url(url: str) -> str:
         if not segment:
             continue
 
-        # Split by hyphens, underscores, and dots (per PRD spec)
+        # Split by hyphens, underscores, and dots
         parts = re.split(r"[-_.]", segment)
 
         for part in parts:

@@ -12,21 +12,17 @@ import json
 import logging
 import sqlite3
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
 import numpy as np
 import pandas as pd
 
-from ..storage.sqlite_backend import VALID_TABLES
+from ..config.constants import VALID_TABLE_NAMES as VALID_TABLES
 from .semantic_embeddings import URLEmbedder
 from .temporal_analysis import TemporalAnalyzer, compute_bundle_statistics
-from .window_optimizer import (
-    OptimizationMetrics,
-    OptimizationWeights,
-    WindowOptimizer,
-)
+from .window_optimizer import OptimizationMetrics, OptimizationWeights, WindowOptimizer
 
 logger = logging.getLogger(__name__)
 
@@ -144,7 +140,7 @@ class ExperimentRunner:
     """
     Run window optimization experiments with full protocol.
 
-    Implements the experiment procedure from the PRD:
+    Implements the experiment procedure from the research methodology:
     1. Data preparation (load, filter, split)
     2. Window evaluation on training data
     3. Statistical comparison between windows
@@ -224,7 +220,7 @@ class ExperimentRunner:
         """
         # Ensure timestamp is datetime
         ts_col = self.config.timestamp_col
-        if df[ts_col].dtype == "object":
+        if not pd.api.types.is_datetime64_any_dtype(df[ts_col]):
             df[ts_col] = pd.to_datetime(df[ts_col], format="ISO8601")
 
         # Sort by timestamp
@@ -401,7 +397,7 @@ class ExperimentRunner:
         Returns:
             ExperimentResult with all findings
         """
-        timestamp = datetime.now().isoformat()
+        timestamp = datetime.now(timezone.utc).isoformat()
         logger.info(f"Starting experiment at {timestamp}")
 
         # Load and split data
@@ -488,7 +484,7 @@ class ExperimentRunner:
         output_dir.mkdir(parents=True, exist_ok=True)
 
         # Generate experiment ID
-        exp_name = self.config.experiment_name or datetime.now().strftime(
+        exp_name = self.config.experiment_name or datetime.now(timezone.utc).strftime(
             "%Y%m%d_%H%M%S"
         )
         exp_dir = output_dir / exp_name
@@ -553,47 +549,51 @@ class ExperimentRunner:
     def print_report(self) -> None:
         """Print formatted experiment report."""
         if self._result is None:
-            print("No results available. Run experiment first.")
+            logger.info("No results available. Run experiment first.")
             return
 
         r = self._result
 
-        print("\n" + "=" * 70)
-        print(" QUERY FAN-OUT WINDOW OPTIMIZATION EXPERIMENT REPORT")
-        print("=" * 70)
+        logger.info("\n" + "=" * 70)
+        logger.info(" QUERY FAN-OUT WINDOW OPTIMIZATION EXPERIMENT REPORT")
+        logger.info("=" * 70)
 
-        print(f"\nExperiment Time: {r.timestamp}")
-        print(f"Data Source: {self.config.db_path} ({self.config.table_name})")
+        logger.info("\nExperiment Time: %s", r.timestamp)
+        logger.info("Data Source: %s (%s)", self.config.db_path, self.config.table_name)
 
-        print("\n--- DATA SUMMARY ---")
-        print(f"Total Records:      {r.total_records:,}")
-        print(f"Filtered Records:   {r.filtered_records:,}")
-        print(f"Training Set:       {r.train_records:,}")
-        print(f"Validation Set:     {r.validation_records:,}")
+        logger.info("\n--- DATA SUMMARY ---")
+        logger.info("Total Records:      %s", f"{r.total_records:,}")
+        logger.info("Filtered Records:   %s", f"{r.filtered_records:,}")
+        logger.info("Training Set:       %s", f"{r.train_records:,}")
+        logger.info("Validation Set:     %s", f"{r.validation_records:,}")
 
-        print("\n--- WINDOW EVALUATION RESULTS ---")
-        print(
-            f"{'Window (ms)':<12} {'OptScore':<10} {'MIBCS':<8} {'BPS':<8} {'Silh.':<8} {'SR':<8} {'GR':<8}"
+        logger.info("\n--- WINDOW EVALUATION RESULTS ---")
+        logger.info(
+            "%s",
+            f"{'Window (ms)':<12} {'OptScore':<10} {'MIBCS':<8} {'BPS':<8} {'Silh.':<8} {'SR':<8} {'GR':<8}",
         )
-        print("-" * 70)
+        logger.info("-" * 70)
 
         for window_ms in sorted(r.window_metrics.keys()):
             m = r.window_metrics[window_ms]
             silh = f"{m.silhouette_score:.4f}" if m.silhouette_score else "N/A"
             best_marker = " *" if window_ms == r.best_window_ms else ""
-            print(
+            logger.info(
+                "%s",
                 f"{window_ms:<12,.0f} {m.opt_score:<10.4f} {m.mibcs:<8.4f} "
                 f"{m.bundle_purity_score:<8.4f} {silh:<8} {m.singleton_rate:<8.2%} "
-                f"{m.giant_rate:<8.2%}{best_marker}"
+                f"{m.giant_rate:<8.2%}{best_marker}",
             )
 
-        print("\n--- RECOMMENDATION ---")
+        logger.info("\n--- RECOMMENDATION ---")
         rec = r.recommendation
-        print(f"Recommended Window:  {rec['recommended_window_ms']:,.0f} ms")
-        print(f"OptScore:           {rec['opt_score']:.4f}")
-        print(f"MIBCS:              {rec['mibcs']:.4f}")
-        print(f"Bundle Purity:      {rec['bundle_purity_score']:.4f}")
-        print(f"Validation Agreement: {rec['validation_agreement']:.1%}")
-        print(f"Confidence:         {rec['confidence'].upper()}")
+        logger.info(
+            "Recommended Window:  %s ms", f"{rec['recommended_window_ms']:,.0f}"
+        )
+        logger.info("OptScore:           %s", f"{rec['opt_score']:.4f}")
+        logger.info("MIBCS:              %s", f"{rec['mibcs']:.4f}")
+        logger.info("Bundle Purity:      %s", f"{rec['bundle_purity_score']:.4f}")
+        logger.info("Validation Agreement: %s", f"{rec['validation_agreement']:.1%}")
+        logger.info("Confidence:         %s", rec["confidence"].upper())
 
-        print("\n" + "=" * 70)
+        logger.info("\n" + "=" * 70)
