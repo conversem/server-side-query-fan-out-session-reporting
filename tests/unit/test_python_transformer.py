@@ -180,7 +180,12 @@ class TestStatsTracking:
     def test_stats_tracking(self):
         transformer = PythonTransformer()
 
-        assert transformer.stats == {"transformed": 0, "filtered": 0, "duplicates": 0}
+        assert transformer.stats == {
+            "transformed": 0,
+            "filtered": 0,
+            "duplicates": 0,
+            "url_filtered": 0,
+        }
 
         transformer.transform(make_record(user_agent="GPTBot/1.0"))
         assert transformer.stats["transformed"] == 1
@@ -193,7 +198,12 @@ class TestStatsTracking:
         transformer.transform(make_record(user_agent="GPTBot/1.0"))
         assert transformer.stats["duplicates"] == 1
 
-        assert transformer.stats == {"transformed": 1, "filtered": 1, "duplicates": 1}
+        assert transformer.stats == {
+            "transformed": 1,
+            "filtered": 1,
+            "duplicates": 1,
+            "url_filtered": 0,
+        }
 
 
 class TestExtraFieldsMapped:
@@ -225,3 +235,58 @@ class TestExtraFieldsMapped:
         assert result["bot_score"] is None
         assert result["is_verified_bot"] == 0
         assert result["crawler_country"] == ""
+
+
+from llm_bot_pipeline.config.settings import UrlFilteringSettings
+
+
+class TestUrlFiltering:
+    """URL resource type filtering in PythonTransformer."""
+
+    def test_js_file_is_filtered(self):
+        t = PythonTransformer()
+        record = make_record(path="/assets/js/chunks-es/Table.880558c.js")
+        result = t.transform(record)
+        assert result is None
+
+    def test_css_file_is_filtered(self):
+        t = PythonTransformer()
+        record = make_record(path="/styles/main.css")
+        result = t.transform(record)
+        assert result is None
+
+    def test_html_page_has_resource_type_document(self):
+        t = PythonTransformer()
+        record = make_record(path="/zonnepanelen/advies")
+        result = t.transform(record)
+        assert result is not None
+        assert result["resource_type"] == "document"
+
+    def test_image_has_resource_type_image(self):
+        t = PythonTransformer()
+        record = make_record(path="/images/solar-panel.jpg")
+        result = t.transform(record)
+        assert result is not None
+        assert result["resource_type"] == "image"
+
+    def test_url_filtered_stat_tracked(self):
+        t = PythonTransformer()
+        t.transform(make_record(path="/script.js"))
+        t.transform(make_record(path="/style.css"))
+        assert t.stats["url_filtered"] == 2
+
+    def test_filtering_disabled_keeps_js(self):
+        settings = UrlFilteringSettings(enabled=False)
+        t = PythonTransformer(url_filtering_settings=settings)
+        record = make_record(path="/script.js")
+        result = t.transform(record)
+        assert result is not None
+        assert result["resource_type"] == "document"
+
+    def test_custom_settings_respected(self):
+        settings = UrlFilteringSettings(drop_extensions=frozenset({"ts"}))
+        t = PythonTransformer(url_filtering_settings=settings)
+        js_result = t.transform(make_record(path="/app.js"))
+        ts_result = t.transform(make_record(path="/app.ts", client_ip="192.0.2.2"))
+        assert js_result is not None
+        assert ts_result is None

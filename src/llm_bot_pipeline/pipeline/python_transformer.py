@@ -9,8 +9,10 @@ import logging
 from datetime import datetime, timezone
 from typing import Optional
 
+from ..config.settings import UrlFilteringSettings
 from ..ingestion.base import IngestionRecord
 from ..utils.bot_classifier import classify_bot
+from ..utils.url_classifier import classify_url
 
 logger = logging.getLogger(__name__)
 
@@ -64,9 +66,17 @@ class PythonTransformer:
     between date boundaries or batches if needed.
     """
 
-    def __init__(self) -> None:
+    def __init__(
+        self, url_filtering_settings: Optional[UrlFilteringSettings] = None
+    ) -> None:
         self._seen: set[tuple] = set()
-        self._stats = {"transformed": 0, "filtered": 0, "duplicates": 0}
+        self._stats = {
+            "transformed": 0,
+            "filtered": 0,
+            "duplicates": 0,
+            "url_filtered": 0,
+        }
+        self._url_settings = url_filtering_settings or UrlFilteringSettings()
 
     def reset_dedup(self) -> None:
         """Clear the deduplication set (e.g. between dates)."""
@@ -104,6 +114,11 @@ class PythonTransformer:
 
         url_path = extract_url_path(record.path)
 
+        resource_type = classify_url(url_path, self._url_settings)
+        if resource_type is None:
+            self._stats["url_filtered"] += 1
+            return None
+
         clean = {
             "request_timestamp": record.timestamp.isoformat(),
             "request_date": record.timestamp.date().isoformat(),
@@ -114,6 +129,7 @@ class PythonTransformer:
             "domain": record.extra.get("domain"),
             "url_path": url_path,
             "url_path_depth": url_path_depth(url_path),
+            "resource_type": resource_type,
             "user_agent_raw": record.user_agent,
             "bot_name": classification.bot_name,
             "bot_provider": classification.bot_provider,

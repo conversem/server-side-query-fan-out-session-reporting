@@ -284,3 +284,46 @@ BIGQUERY_BATCH_SIZE = 10000
 AUTOFIT_SAMPLE_ROWS = 100
 EXCEL_DATETIME_FORMAT = "YYYY-MM-DD HH:MM:SS"
 EXCEL_DATE_FORMAT = "YYYY-MM-DD"
+
+# =============================================================================
+# URL Resource Type Filtering Defaults
+# =============================================================================
+
+DEFAULT_DROP_EXTENSIONS = frozenset(
+    {
+        "js",
+        "mjs",
+        "css",
+        "map",
+        "woff",
+        "woff2",
+        "ttf",
+        "eot",
+        "otf",
+        "ico",
+    }
+)
+
+DEFAULT_IMAGE_EXTENSIONS = frozenset(
+    {
+        "jpg",
+        "jpeg",
+        "png",
+        "gif",
+        "svg",
+        "webp",
+        "avif",
+        "bmp",
+    }
+)
+
+DEFAULT_DROP_PATH_PREFIXES = (
+    "/assets/js/",
+    "/assets/css/",
+    "/static/",
+    "/_next/",
+    "/chunks/",
+    "/vendor/",
+    "/node_modules/",
+    "/__/",
+)

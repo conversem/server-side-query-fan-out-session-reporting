@@ -107,7 +107,19 @@ class DataOpsMixin:
         if not result:
             return {"rows_transformed": 0, "duplicates_removed": 0}
 
-        records = [self._row_to_clean_record(row) for row in result]
+        records = []
+        url_filtered = 0
+        for row in result:
+            clean = self._row_to_clean_record(row)
+            if clean is not None:
+                records.append(clean)
+            else:
+                url_filtered += 1
+
+        if url_filtered:
+            logger.info(
+                "URL filtering dropped %d non-user-facing records", url_filtered
+            )
 
         if not records:
             return {"rows_transformed": 0, "duplicates_removed": 0}

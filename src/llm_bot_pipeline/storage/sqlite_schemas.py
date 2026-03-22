@@ -51,6 +51,7 @@ CREATE TABLE IF NOT EXISTS bot_requests_daily (
     crawler_country TEXT,
     response_status INTEGER NOT NULL,
     response_status_category TEXT NOT NULL,
+    resource_type TEXT NOT NULL DEFAULT 'document',
     _processed_at TEXT NOT NULL
 )
 """
