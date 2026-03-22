@@ -543,13 +543,15 @@ class SQLiteBackend(StorageBackend):
                 request_uri, request_host, domain, url_path, url_path_depth,
                 user_agent_raw, bot_name, bot_provider, bot_category,
                 bot_score, is_verified_bot, crawler_country,
-                response_status, response_status_category, _processed_at
+                response_status, response_status_category,
+                resource_type, _processed_at
             ) VALUES (
                 :request_timestamp, :request_date, :request_hour, :day_of_week,
                 :request_uri, :request_host, :domain, :url_path, :url_path_depth,
                 :user_agent_raw, :bot_name, :bot_provider, :bot_category,
                 :bot_score, :is_verified_bot, :crawler_country,
-                :response_status, :response_status_category, :_processed_at
+                :response_status, :response_status_category,
+                :resource_type, :_processed_at
             )
         """
 
@@ -578,6 +580,7 @@ class SQLiteBackend(StorageBackend):
                 "crawler_country": record.get("crawler_country"),
                 "response_status": record.get("response_status"),
                 "response_status_category": record.get("response_status_category"),
+                "resource_type": record.get("resource_type", "document"),
                 "_processed_at": record.get("_processed_at", now),
             }
             converted_records.append(converted)

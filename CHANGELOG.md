@@ -5,6 +5,39 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.0] - 2026-03-13
+
+### Added
+
+- **URL resource type filtering** (`utils/url_classifier.py`) — classifies URLs before
+  storage: JS, CSS, fonts, and static asset paths are dropped; image files are kept
+  with `resource_type = "image"`; everything else is `resource_type = "document"`.
+  Filtering runs consistently across all pipeline modes (`local_sqlite`,
+  `local_bq_buffered`, `local_bq_streaming`). Fully configurable via `config.yaml`
+  or environment variables; can be disabled entirely.
+- **`resource_type` column in `bot_requests_daily`** — existing rows default to
+  `"document"`; new rows are classified on ingest. No backfill required.
+- **URL filtering documentation** — `docs/url-filtering.md` with configuration
+  reference, SQL usage examples, and migration notes.
+
+### Changed
+
+- **`config.example.yaml`** — new `url_filtering` section with all configurable
+  extensions and path prefixes documented
+- **Streaming pipeline** — backpressure mechanism prevents unbounded memory growth
+  under high throughput; dedup set resets per date boundary
+- **SQLite backend** — `VACUUM` after large deletes to reclaim disk space;
+  improved error propagation instead of silent failures
+- **Settings** — `Settings.validate()` raises `ConfigurationError` on invalid
+  config; secret-redacting `__repr__` to prevent accidental log leaks
+- **Pipeline stages** — order-by parameter validation; table/column name whitelist
+  to prevent SQL injection; specific `StorageError`/`PipelineError` exceptions
+  replace broad `Exception` handlers
+- **Logging** — structured JSON logging for cloud environments; error logs enriched
+  with contextual information
+- **CI** — bandit security scanner and pip-audit added to pre-commit hooks and
+  GitHub Actions workflow
+
 ## [2.0.0] - 2026-03-12
 
 Third public release. Major expansion of reporting, pipeline modes, and database

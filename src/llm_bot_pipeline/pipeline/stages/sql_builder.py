@@ -7,9 +7,11 @@ Provides the transform SQL query and bot classification CASE statements.
 from __future__ import annotations
 
 from datetime import date
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 from ...config.constants import BOT_CLASSIFICATION, TABLE_RAW_BOT_REQUESTS
+from ...config.settings import UrlFilteringSettings
+from ...utils.url_classifier import classify_url
 from ..python_transformer import url_path_depth
 from ..sql_utils import build_clean_insert_sql
 
@@ -21,9 +23,18 @@ class SqlBuilderMixin:
     """SQL query building methods."""
 
     _sql: SQLBuilder
+    _url_settings: UrlFilteringSettings
 
-    def _row_to_clean_record(self, row: dict) -> dict:
-        """Convert a query result row to a clean record for insertion."""
+    def _row_to_clean_record(self, row: dict) -> Optional[dict]:
+        """Convert a query result row to a clean record for insertion.
+
+        Returns None if the URL is classified as a non-user-facing asset.
+        """
+        url_path = row.get("url_path", "")
+        resource_type = classify_url(url_path, self._url_settings)
+        if resource_type is None:
+            return None
+
         return {
             "request_timestamp": row.get("request_timestamp"),
             "request_date": row.get("request_date"),
@@ -32,7 +43,7 @@ class SqlBuilderMixin:
             "request_uri": row.get("request_uri"),
             "request_host": row.get("request_host"),
             "domain": row.get("domain"),
-            "url_path": row.get("url_path", ""),
+            "url_path": url_path,
             "url_path_depth": url_path_depth(row.get("url_path", "")),
             "user_agent_raw": row.get("user_agent_raw"),
             "bot_name": row.get("bot_name"),
@@ -43,6 +54,7 @@ class SqlBuilderMixin:
             "crawler_country": row.get("crawler_country"),
             "response_status": row.get("response_status"),
             "response_status_category": row.get("response_status_category"),
+            "resource_type": resource_type,
             "_processed_at": row.get("_processed_at"),
         }
 

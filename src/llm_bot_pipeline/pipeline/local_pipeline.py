@@ -87,6 +87,17 @@ class LocalPipeline(
 
         self._backend_type = self._backend.backend_type
         self._sql = SQLBuilder(self._backend_type)
+
+        from ..config.settings import UrlFilteringSettings
+
+        try:
+            from ..config.settings import get_settings
+
+            settings = get_settings()
+            self._url_settings = settings.url_filtering
+        except Exception:
+            self._url_settings = UrlFilteringSettings()
+
         self._initialized = False
         self._checkpoint_manager: Optional[CheckpointManager] = (
             CheckpointManager(checkpoint_path) if checkpoint_path else None

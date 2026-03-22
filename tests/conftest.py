@@ -20,6 +20,7 @@ from freezegun import freeze_time
 # ---------------------------------------------------------------------------
 try:
     from llm_bot_pipeline.storage.bigquery_backend import BigQueryBackend  # noqa: F401
+
     _BIGQUERY_AVAILABLE = True
 except (ImportError, ModuleNotFoundError):
     _BIGQUERY_AVAILABLE = False
@@ -35,6 +36,7 @@ def pytest_collection_modifyitems(items):
     for item in items:
         if item.get_closest_marker("bigquery"):
             item.add_marker(skip_marker)
+
 
 # ---------------------------------------------------------------------------
 # Register explicit sqlite3 adapters for date/datetime (Python 3.12+).

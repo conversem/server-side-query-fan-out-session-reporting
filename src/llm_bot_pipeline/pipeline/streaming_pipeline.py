@@ -15,6 +15,7 @@ from typing import Iterator, Optional
 
 from ..config.constants import DEFAULT_MAX_PENDING_BATCHES, DEFAULT_STREAMING_BATCH_SIZE
 from ..config.logging_config import log_with_context
+from ..config.settings import UrlFilteringSettings, get_settings
 from ..ingestion.base import IngestionRecord
 from ..monitoring.retry_handler import RetryConfig, RetryManager
 from ..storage import StorageBackend, StorageError
@@ -38,6 +39,7 @@ class StreamingPipelineResult:
     records_transformed: int = 0
     records_filtered: int = 0
     duplicates: int = 0
+    url_filtered: int = 0
     batches_flushed: int = 0
     dead_lettered_count: int = 0
     errors: list[str] = field(default_factory=list)
@@ -60,6 +62,7 @@ class StreamingPipelineResult:
             "records_transformed": self.records_transformed,
             "records_filtered": self.records_filtered,
             "duplicates": self.duplicates,
+            "url_filtered": self.url_filtered,
             "batches_flushed": self.batches_flushed,
             "dead_lettered_count": self.dead_lettered_count,
             "errors": self.errors,
@@ -85,7 +88,11 @@ class StreamingPipeline:
         retry_config: Optional[RetryConfig] = None,
         dead_letter_path: Optional[str] = None,
     ) -> None:
-        self._transformer = PythonTransformer()
+        try:
+            url_settings = get_settings().url_filtering
+        except Exception:
+            url_settings = UrlFilteringSettings()
+        self._transformer = PythonTransformer(url_filtering_settings=url_settings)
         self._output = output_backend
         self._batch_size = batch_size
         self._max_pending_batches = max_pending_batches
@@ -161,14 +168,17 @@ class StreamingPipeline:
             result.records_transformed = stats["transformed"]
             result.records_filtered = stats["filtered"]
             result.duplicates = stats["duplicates"]
+            result.url_filtered = stats.get("url_filtered", 0)
             result.success = True
 
             logger.info(
                 "StreamingPipeline: done -- %d in, %d transformed, "
-                "%d filtered, %d dupes, %d batches, %d dead-lettered",
+                "%d filtered, %d url-filtered, %d dupes, %d batches, "
+                "%d dead-lettered",
                 result.records_in,
                 result.records_transformed,
                 result.records_filtered,
+                result.url_filtered,
                 result.duplicates,
                 result.batches_flushed,
                 result.dead_lettered_count,

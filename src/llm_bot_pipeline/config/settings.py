@@ -35,6 +35,9 @@ from .constants import (
     DATASET_RAW,
     DATASET_REPORT,
     DATASET_STAGING,
+    DEFAULT_DROP_EXTENSIONS,
+    DEFAULT_DROP_PATH_PREFIXES,
+    DEFAULT_IMAGE_EXTENSIONS,
     KEY_FILE_NAME,
     SERVICE_ACCOUNT_ID,
     SQLITE_PROCESSING_MODES,
@@ -195,6 +198,88 @@ class SessionRefinementSettings:
 
 
 # =============================================================================
+# URL Resource Type Filtering Settings
+# =============================================================================
+
+
+@dataclass
+class UrlFilteringSettings:
+    """Configuration for URL resource type filtering.
+
+    Controls which URLs are kept or dropped before data reaches storage.
+    Non-user-facing assets (JS, CSS, fonts) are dropped to reduce noise
+    in reporting tables and save storage.
+    """
+
+    enabled: bool = True
+    drop_extensions: frozenset[str] = field(
+        default_factory=lambda: DEFAULT_DROP_EXTENSIONS
+    )
+    image_extensions: frozenset[str] = field(
+        default_factory=lambda: DEFAULT_IMAGE_EXTENSIONS
+    )
+    drop_path_prefixes: tuple[str, ...] = field(
+        default_factory=lambda: DEFAULT_DROP_PATH_PREFIXES
+    )
+
+    def validate(self) -> list[str]:
+        errors = []
+        overlap = self.drop_extensions & self.image_extensions
+        if overlap:
+            errors.append(
+                f"url_filtering: overlap between drop_extensions and "
+                f"image_extensions: {overlap}"
+            )
+        return errors
+
+    def to_dict(self) -> dict:
+        return {
+            "enabled": self.enabled,
+            "drop_extensions": sorted(self.drop_extensions),
+            "image_extensions": sorted(self.image_extensions),
+            "drop_path_prefixes": list(self.drop_path_prefixes),
+        }
+
+    @classmethod
+    def from_dict(cls, config: dict[str, Any]) -> "UrlFilteringSettings":
+        kwargs: dict[str, Any] = {}
+        if "enabled" in config:
+            kwargs["enabled"] = config["enabled"]
+        if "drop_extensions" in config:
+            kwargs["drop_extensions"] = frozenset(config["drop_extensions"])
+        if "image_extensions" in config:
+            kwargs["image_extensions"] = frozenset(config["image_extensions"])
+        if "drop_path_prefixes" in config:
+            kwargs["drop_path_prefixes"] = tuple(config["drop_path_prefixes"])
+        return cls(**kwargs)
+
+    @classmethod
+    def from_env(cls) -> "UrlFilteringSettings":
+        kwargs: dict[str, Any] = {}
+        if "URL_FILTERING_ENABLED" in os.environ:
+            kwargs["enabled"] = os.environ["URL_FILTERING_ENABLED"].lower() == "true"
+        if "URL_FILTERING_DROP_EXTENSIONS" in os.environ:
+            kwargs["drop_extensions"] = frozenset(
+                e.strip()
+                for e in os.environ["URL_FILTERING_DROP_EXTENSIONS"].split(",")
+                if e.strip()
+            )
+        if "URL_FILTERING_IMAGE_EXTENSIONS" in os.environ:
+            kwargs["image_extensions"] = frozenset(
+                e.strip()
+                for e in os.environ["URL_FILTERING_IMAGE_EXTENSIONS"].split(",")
+                if e.strip()
+            )
+        if "URL_FILTERING_DROP_PATH_PREFIXES" in os.environ:
+            kwargs["drop_path_prefixes"] = tuple(
+                p.strip()
+                for p in os.environ["URL_FILTERING_DROP_PATH_PREFIXES"].split(",")
+                if p.strip()
+            )
+        return cls(**kwargs)
+
+
+# =============================================================================
 # Multi-Domain Configuration
 # =============================================================================
 
@@ -305,6 +390,9 @@ class Settings:
         default_factory=SessionRefinementSettings
     )
 
+    # URL Resource Type Filtering
+    url_filtering: UrlFilteringSettings = field(default_factory=UrlFilteringSettings)
+
     def validate(self) -> list[str]:
         """Validate required settings are present. Returns list of errors."""
         errors = []
@@ -345,6 +433,7 @@ class Settings:
             )
 
         errors.extend(self.session_refinement.validate())
+        errors.extend(self.url_filtering.validate())
 
         return errors
 
@@ -429,6 +518,7 @@ class Settings:
         bq = config.get("bigquery", {})
         cf = config.get("cloudflare", {})
         sr = config.get("session_refinement", {})
+        uf = config.get("url_filtering", {})
         sm = config.get("sitemap", {})
         metrics = config.get("metrics", {})
 
@@ -471,6 +561,7 @@ class Settings:
                 "pushgateway_url", "http://localhost:9091"
             ),
             session_refinement=SessionRefinementSettings.from_dict(sr),
+            url_filtering=UrlFilteringSettings.from_dict(uf),
         )
 
     @classmethod
@@ -517,6 +608,7 @@ class Settings:
                 "METRICS_PUSHGATEWAY_URL", "http://localhost:9091"
             ),
             session_refinement=SessionRefinementSettings.from_env(),
+            url_filtering=UrlFilteringSettings.from_env(),
         )
 
 

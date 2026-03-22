@@ -87,6 +87,7 @@ class TestCleanSchemaFields:
             "crawler_country",
             "response_status",
             "response_status_category",
+            "resource_type",
             "_processed_at",
         }
         actual = set(CLEAN_BOT_REQUESTS_COLUMNS.keys())

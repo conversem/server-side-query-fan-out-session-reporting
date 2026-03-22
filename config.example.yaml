@@ -105,6 +105,60 @@ session_refinement:
   collect_refinement_metrics: true
 
 # =============================================================================
+# URL Filtering (Resource Type Classification)
+# =============================================================================
+# Controls which URLs are kept or dropped before data reaches storage.
+# Non-user-facing assets (JS, CSS, fonts) are dropped to keep reporting clean
+# and reduce storage costs. Customize for your website's asset structure.
+#
+# How it works:
+# 1. Extension-based filtering runs first (drop_extensions, image_extensions)
+# 2. Path-prefix filtering catches extensionless asset paths (drop_path_prefixes)
+# 3. Everything else is classified as "document" (kept)
+#
+# To disable filtering entirely: set enabled: false
+url_filtering:
+  enabled: true
+
+  # File extensions to DROP (non-user-facing, never stored)
+  # These are technical assets that bots may request but have no analytical value
+  drop_extensions:
+    - js       # JavaScript
+    - mjs      # ES modules
+    - css      # Stylesheets
+    - map      # Source maps
+    - woff     # Web fonts
+    - woff2
+    - ttf
+    - eot
+    - otf
+    - ico      # Favicons
+
+  # File extensions classified as "image" (stored with resource_type = "image")
+  # Images are kept but can be filtered in reporting views if needed
+  image_extensions:
+    - jpg
+    - jpeg
+    - png
+    - gif
+    - svg
+    - webp
+    - avif
+    - bmp
+
+  # URL path prefixes to DROP (customize to your website's asset directories)
+  # Catches asset URLs that don't have file extensions
+  drop_path_prefixes:
+    - /assets/js/
+    - /assets/css/
+    - /static/
+    - /_next/
+    - /chunks/
+    - /vendor/
+    - /node_modules/
+    - /__/
+
+# =============================================================================
 # Monitoring & Alerting
 # =============================================================================
 # Monitoring is configured programmatically via AlertManager/DataQualityChecker.

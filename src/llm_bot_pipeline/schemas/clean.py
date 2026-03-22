@@ -32,6 +32,8 @@ CLEAN_BOT_REQUESTS_COLUMNS = {
     # Response
     "response_status": "INTEGER",
     "response_status_category": "TEXT",
+    # Resource classification
+    "resource_type": "TEXT NOT NULL DEFAULT 'document'",
     # Metadata
     "_processed_at": "TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
 }
