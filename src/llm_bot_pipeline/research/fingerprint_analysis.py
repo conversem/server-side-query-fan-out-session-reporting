@@ -80,8 +80,8 @@ class FingerprintConsistencyMetrics:
     Aggregated fingerprint consistency metrics across multiple bundles.
 
     Focuses on geographic fingerprints (country) as the primary consistency
-    indicator beyond IP/subnet. BotScore, BotTags, and ResponseStatus are
-    excluded as they don't reflect user-agent request characteristics.
+    indicator beyond IP/subnet. BotTags and ResponseStatus are excluded
+    as they don't reflect user-agent request characteristics.
 
     Attributes:
         total_bundles: Number of bundles analyzed
@@ -276,8 +276,8 @@ class FingerprintAnalyzer:
         Compute aggregated fingerprint consistency metrics across bundles.
 
         Focuses on country consistency as the primary fingerprint beyond IP.
-        BotScore, BotTags, and ResponseStatus are excluded as they don't
-        reflect user-agent request characteristics.
+        BotTags and ResponseStatus are excluded as they don't reflect
+        user-agent request characteristics.
 
         Args:
             bundles: List of EnrichedBundle objects to analyze

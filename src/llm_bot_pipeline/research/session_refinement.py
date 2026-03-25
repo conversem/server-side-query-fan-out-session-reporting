@@ -540,7 +540,6 @@ class SessionRefiner:
                     request_indices=list(range(len(indices))),
                     client_ips=comp_ips,
                     response_statuses=[],
-                    bot_scores=[],
                     countries=[],
                     bot_tags=[],
                     bot_name=bundle.bot_name,
@@ -673,11 +672,6 @@ class SessionRefiner:
                     bundle.response_statuses[j]
                     for j in split.request_indices
                     if j < len(bundle.response_statuses)
-                ],
-                bot_scores=[
-                    bundle.bot_scores[j]
-                    for j in split.request_indices
-                    if j < len(bundle.bot_scores)
                 ],
                 countries=[
                     bundle.countries[j]

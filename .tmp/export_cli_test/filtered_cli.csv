@@ -1,0 +1,2 @@
+session_id,fanout_session_name,session_date,session_start_time,session_end_time,duration_ms,bot_provider,bot_name,request_count,unique_urls,mean_cosine_similarity,min_cosine_similarity,confidence_level,url_list
+sess-001,mortgage calculator,2025-01-15,2025-01-15T10:00:00Z,2025-01-15T10:00:05Z,5000,OpenAI,ChatGPT-User,5,4,0.85,0.72,high,"[""/mortgage/calc"", ""/mortgage/rates"", ""/mortgage/faq"", ""/about""]"

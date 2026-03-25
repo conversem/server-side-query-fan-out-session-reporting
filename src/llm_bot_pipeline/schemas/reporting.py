@@ -14,8 +14,6 @@ DAILY_SUMMARY_COLUMNS = {
     "unique_bots": "INTEGER",
     "unique_ips": "INTEGER",
     "unique_urls": "INTEGER",
-    "avg_bot_score": "REAL",
-    "verified_bot_pct": "REAL",
     "success_rate": "REAL",
     "_created_at": "TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
 }
@@ -29,7 +27,6 @@ URL_PERFORMANCE_COLUMNS = {
     "url_path": "TEXT PRIMARY KEY",
     "request_count": "INTEGER",
     "unique_bots": "INTEGER",
-    "avg_bot_score": "REAL",
     "success_rate": "REAL",
     "first_seen": "DATE",
     "last_seen": "DATE",

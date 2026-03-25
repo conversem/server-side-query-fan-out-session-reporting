@@ -49,7 +49,6 @@ class DataQualityChecker:
     CLEAN_TABLE_RANGES = {
         "request_hour": (0, 23),
         "response_status": (100, 599),
-        "bot_score": (1, 99),
     }
 
     def __init__(

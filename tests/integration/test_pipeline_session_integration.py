@@ -8,7 +8,6 @@ Tests:
 - Pipeline returns correct status including session metrics
 """
 
-import json
 import subprocess
 import sys
 from datetime import date, datetime, timedelta
@@ -71,10 +70,6 @@ def db_with_raw_data(tmp_path):
             "ClientRequestURI": f"/mortgage/page-{i}",
             "ClientRequestHost": "example.com",
             "ClientRequestUserAgent": "Mozilla/5.0 ChatGPT-User",
-            "BotScore": 1,
-            "BotScoreSrc": "Verified Bot",
-            "VerifiedBot": 1,
-            "BotTags": json.dumps(["ChatGPT-User"]),
             "ClientIP": "1.2.3.4",
             "ClientCountry": "US",
             "EdgeResponseStatus": 200,
@@ -92,10 +87,6 @@ def db_with_raw_data(tmp_path):
             "ClientRequestURI": f"/insurance/policy-{i}",
             "ClientRequestHost": "example.com",
             "ClientRequestUserAgent": "Mozilla/5.0 PerplexityBot",
-            "BotScore": 1,
-            "BotScoreSrc": "Verified Bot",
-            "VerifiedBot": 1,
-            "BotTags": json.dumps(["PerplexityBot"]),
             "ClientIP": "5.6.7.8",
             "ClientCountry": "NL",
             "EdgeResponseStatus": 200,
@@ -142,8 +133,6 @@ def db_with_processed_data(db_with_raw_data):
             "bot_name": "ChatGPT-User",
             "bot_provider": "OpenAI",
             "bot_category": "user_request",
-            "bot_score": 1,
-            "is_verified_bot": 1,
             "crawler_country": "US",
             "response_status": 200,
             "response_status_category": "success",
@@ -169,8 +158,6 @@ def db_with_processed_data(db_with_raw_data):
             "bot_name": "PerplexityBot",
             "bot_provider": "Perplexity",
             "bot_category": "user_request",
-            "bot_score": 1,
-            "is_verified_bot": 1,
             "crawler_country": "NL",
             "response_status": 200,
             "response_status_category": "success",
@@ -289,8 +276,6 @@ class TestRunSessionAggregation:
             "bot_name": "GPTBot",
             "bot_provider": "OpenAI",
             "bot_category": "training",  # Training, not user_request
-            "bot_score": 1,
-            "is_verified_bot": 1,
             "crawler_country": "US",
             "response_status": 200,
             "response_status_category": "success",

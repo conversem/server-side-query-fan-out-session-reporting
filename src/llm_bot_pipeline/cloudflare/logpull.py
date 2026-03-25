@@ -8,7 +8,7 @@ Key features:
 - Pull logs for date ranges (with 7-day retention limit)
 - Automatic pagination for large time ranges (1-hour chunks)
 - Rate limiting with exponential backoff
-- Filter for verified LLM bots
+- User-agent-based LLM bot classification (post-ingestion)
 - Direct ingestion to SQLite backend
 """
 
@@ -314,33 +314,38 @@ def _fetch_logs_chunk(
                 "fields": ",".join(fields),
             }
 
-            response = httpx.get(api_url, headers=headers, params=params, timeout=60.0)
-
-            if response.status_code != 200:
-                raise Exception(f"HTTP {response.status_code}: {response.text[:500]}")
-
             record_count = 0
             filtered_count = 0
-            for line in response.text.strip().split("\n"):
-                if not line:
-                    continue
-                try:
-                    record = json.loads(line)
-                except json.JSONDecodeError:
-                    continue
 
-                if filter_llm_bots:
-                    user_agent = record.get("ClientRequestUserAgent", "")
-                    bot_info = classify_bot(user_agent)
-                    if bot_info is None:
-                        filtered_count += 1
+            with httpx.stream(
+                "GET", api_url, headers=headers, params=params, timeout=120.0
+            ) as response:
+                if response.status_code != 200:
+                    response.read()
+                    raise Exception(
+                        f"HTTP {response.status_code}: {response.text[:500]}"
+                    )
+
+                for line in response.iter_lines():
+                    if not line:
                         continue
-                    record["_bot_name"] = bot_info.bot_name
-                    record["_bot_provider"] = bot_info.bot_provider
-                    record["_bot_category"] = bot_info.bot_category
+                    try:
+                        record = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
 
-                record_count += 1
-                yield record
+                    if filter_llm_bots:
+                        user_agent = record.get("ClientRequestUserAgent", "")
+                        bot_info = classify_bot(user_agent)
+                        if bot_info is None:
+                            filtered_count += 1
+                            continue
+                        record["_bot_name"] = bot_info.bot_name
+                        record["_bot_provider"] = bot_info.bot_provider
+                        record["_bot_category"] = bot_info.bot_category
+
+                    record_count += 1
+                    yield record
 
             if filter_llm_bots and filtered_count > 0:
                 logger.debug(

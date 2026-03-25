@@ -27,8 +27,6 @@ class TestRawToCleanConversion:
             "status_code": 200,
             "user_agent": "Mozilla/5.0 GPTBot/1.0 (+https://openai.com/bot)",
             "extra": {
-                "BotScore": 95,
-                "VerifiedBot": 1,
                 "ClientCountry": "US",
             },
         }
@@ -56,8 +54,6 @@ class TestRawToCleanConversion:
         assert clean["bot_name"] == "GPTBot"
         assert clean["bot_provider"] == "OpenAI"
         assert clean["bot_category"] == "training"
-        assert clean["bot_score"] == 95
-        assert clean["is_verified_bot"] == 1
         assert clean["crawler_country"] == "US"
         assert clean["response_status"] == 200
         assert clean["response_status_category"] == "2xx"
@@ -82,8 +78,6 @@ class TestCleanSchemaFields:
             "bot_name",
             "bot_provider",
             "bot_category",
-            "bot_score",
-            "is_verified_bot",
             "crawler_country",
             "response_status",
             "response_status_category",
@@ -110,8 +104,6 @@ class TestReportingSchemaFields:
             "unique_bots",
             "unique_ips",
             "unique_urls",
-            "avg_bot_score",
-            "verified_bot_pct",
             "success_rate",
             "_created_at",
         }
@@ -124,7 +116,6 @@ class TestReportingSchemaFields:
             "url_path",
             "request_count",
             "unique_bots",
-            "avg_bot_score",
             "success_rate",
             "first_seen",
             "last_seen",
@@ -158,10 +149,6 @@ class TestRawSchemaFields:
             "ClientRequestHost",
             "domain",
             "ClientRequestUserAgent",
-            "BotScore",
-            "BotScoreSrc",
-            "VerifiedBot",
-            "BotTags",
             "ClientIP",
             "ClientCountry",
             "EdgeResponseStatus",

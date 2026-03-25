@@ -25,8 +25,6 @@ CLEAN_BOT_REQUESTS_COLUMNS = {
     "bot_name": "TEXT",
     "bot_provider": "TEXT",
     "bot_category": "TEXT",
-    "bot_score": "INTEGER",
-    "is_verified_bot": "INTEGER",  # Boolean as 0/1
     # Geo
     "crawler_country": "TEXT",
     # Response

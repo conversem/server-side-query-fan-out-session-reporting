@@ -27,9 +27,9 @@ def backend_with_data(tmp_path):
             """INSERT INTO daily_summary
                (request_date, bot_provider, bot_name, bot_category,
                 total_requests, unique_urls, unique_hosts,
-                avg_bot_score, successful_requests, error_requests,
+                successful_requests, error_requests,
                 redirect_requests, _aggregated_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 d,
                 "OpenAI",
@@ -38,7 +38,6 @@ def backend_with_data(tmp_path):
                 100 + i * 10,
                 5 + i,
                 1,
-                10.0,
                 90,
                 5,
                 5,

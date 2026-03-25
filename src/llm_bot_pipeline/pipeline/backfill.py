@@ -114,17 +114,6 @@ def _iso_to_unix_nanos(value: Optional[str]) -> Optional[int]:
         return None
 
 
-def _parse_bot_tags(value: Optional[str]) -> list[str]:
-    """Parse JSON-encoded BotTags string into a list."""
-    if not value:
-        return []
-    try:
-        tags = json.loads(value)
-        return tags if isinstance(tags, list) else []
-    except (json.JSONDecodeError, TypeError):
-        return []
-
-
 def map_raw_bot_requests(row: dict, domain: str) -> dict:
     """Map a POC raw_bot_requests row to the BigQuery schema."""
     ua = row.get("ClientRequestUserAgent")
@@ -136,12 +125,6 @@ def map_raw_bot_requests(row: dict, domain: str) -> dict:
         "ClientRequestHost": row.get("ClientRequestHost"),
         "domain": domain,
         "ClientRequestUserAgent": ua,
-        "BotScore": row.get("BotScore"),
-        "BotScoreSrc": row.get("BotScoreSrc"),
-        "VerifiedBot": (
-            bool(row.get("VerifiedBot")) if row.get("VerifiedBot") is not None else None
-        ),
-        "BotTags": _parse_bot_tags(row.get("BotTags")),
         "ClientIP": row.get("ClientIP"),
         "ClientCountry": row.get("ClientCountry"),
         "EdgeResponseStatus": row.get("EdgeResponseStatus"),
@@ -170,12 +153,6 @@ def map_bot_requests_daily(row: dict, domain: str) -> dict:
         "bot_name": row.get("bot_name"),
         "bot_provider": row.get("bot_provider"),
         "bot_category": row.get("bot_category"),
-        "bot_score": row.get("bot_score"),
-        "is_verified_bot": (
-            bool(row.get("is_verified_bot"))
-            if row.get("is_verified_bot") is not None
-            else False
-        ),
         "crawler_country": row.get("crawler_country"),
         "response_status": row.get("response_status"),
         "response_status_category": row.get("response_status_category"),

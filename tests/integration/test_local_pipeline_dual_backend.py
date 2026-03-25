@@ -21,8 +21,6 @@ def _seed_raw_data(db_path: Path) -> None:
             ClientRequestHost TEXT,
             domain TEXT,
             ClientRequestUserAgent TEXT,
-            BotScore INTEGER,
-            VerifiedBot INTEGER,
             ClientIP TEXT,
             ClientCountry TEXT,
             EdgeResponseStatus INTEGER
@@ -35,8 +33,6 @@ def _seed_raw_data(db_path: Path) -> None:
             "example.com",
             None,
             "Mozilla/5.0 (compatible; GPTBot/1.0)",
-            10,
-            1,
             "1.2.3.4",
             "US",
             200,
@@ -47,14 +43,12 @@ def _seed_raw_data(db_path: Path) -> None:
             "example.com",
             None,
             "Mozilla/5.0 (compatible; ClaudeBot/1.0)",
-            15,
-            1,
             "5.6.7.8",
             "NL",
             200,
         ),
     ]
-    conn.executemany("INSERT INTO raw_bot_requests VALUES (?,?,?,?,?,?,?,?,?,?)", rows)
+    conn.executemany("INSERT INTO raw_bot_requests VALUES (?,?,?,?,?,?,?,?)", rows)
     conn.commit()
     conn.close()
 

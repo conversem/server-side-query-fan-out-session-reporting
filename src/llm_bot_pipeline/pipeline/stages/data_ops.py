@@ -54,12 +54,10 @@ class DataOpsMixin:
             StorageError: If the stats query fails.
         """
         date_filter = self._sql.date_filter("EdgeStartTimestamp", start_date, end_date)
-        verified_count = self._sql.countif("VerifiedBot = 1")
 
         sql = f"""
             SELECT
                 COUNT(*) as total_rows,
-                {verified_count} as verified_bots,
                 COUNT(DISTINCT ClientRequestUserAgent) as unique_user_agents
             FROM {TABLE_RAW_BOT_REQUESTS}
             WHERE {date_filter}

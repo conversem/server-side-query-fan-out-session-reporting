@@ -87,7 +87,7 @@ def _make_record(
         path=path or f"/page/{index}",
         status_code=200,
         user_agent=user_agent,
-        extra={"BotScore": 5, "VerifiedBot": 1, "ClientCountry": "US"},
+        extra={"ClientCountry": "US"},
     )
 
 
@@ -186,7 +186,7 @@ class TestStreamingDedupIntegration:
                     path="/dup-page",
                     status_code=200,
                     user_agent=BOT_USER_AGENT,
-                    extra={"BotScore": 5, "VerifiedBot": 1, "ClientCountry": "US"},
+                    extra={"ClientCountry": "US"},
                 )
 
         backend = MockBigQueryBackend()

@@ -1,8 +1,7 @@
 """
 Storage backend factory.
 
-Provides factory function to create storage backends (SQLite, BigQuery, etc.).
-Backends are lazily loaded to avoid importing heavy dependencies until needed.
+Provides factory function to create SQLite storage backend.
 """
 
 import logging
@@ -13,18 +12,11 @@ from .base import StorageBackend, StorageError
 
 logger = logging.getLogger(__name__)
 
-# Registry of available backends
 _BACKEND_REGISTRY: dict[str, type[StorageBackend]] = {}
 
 
 def register_backend(backend_type: str, backend_class: type[StorageBackend]) -> None:
-    """
-    Register a storage backend class.
-
-    Args:
-        backend_type: Backend identifier (e.g., 'sqlite')
-        backend_class: Class implementing StorageBackend interface
-    """
+    """Register a storage backend class."""
     _BACKEND_REGISTRY[backend_type.lower()] = backend_class
     logger.debug(f"Registered storage backend: {backend_type}")
 
@@ -33,42 +25,14 @@ def get_backend(
     backend_type: Optional[str] = None,
     **kwargs,
 ) -> StorageBackend:
-    """
-    Get a storage backend instance based on configuration.
-
-    Args:
-        backend_type: Backend type ('sqlite', 'bigquery').
-                      If None, loads from settings.
-        **kwargs: Additional arguments passed to backend constructor.
-                  For SQLite: db_path
-                  For BigQuery: project_id, credentials_path, dataset_raw, dataset_report, location
-
-    Returns:
-        Initialized StorageBackend instance.
-
-    Raises:
-        StorageError: If backend type is not supported or initialization fails.
-
-    Examples:
-        # Get backend from settings
-        backend = get_backend()
-
-        # Explicitly request SQLite
-        backend = get_backend('sqlite', db_path='data/logs.db')
-
-        # Explicitly request BigQuery
-        backend = get_backend('bigquery', project_id='my-project')
-    """
-    # Get backend type from settings if not specified
+    """Get a storage backend instance based on configuration."""
     if backend_type is None:
         from ..config.settings import get_settings
-
         settings = get_settings()
         backend_type = settings.storage_backend
 
     backend_type = backend_type.lower()
 
-    # Lazy-load backend implementations
     if backend_type not in _BACKEND_REGISTRY:
         _load_backend(backend_type)
 
@@ -81,7 +45,6 @@ def get_backend(
 
     backend_class = _BACKEND_REGISTRY[backend_type]
 
-    # Get default configuration from settings if needed
     if not kwargs:
         kwargs = _get_default_kwargs(backend_type)
 
@@ -93,98 +56,37 @@ def get_backend(
         raise StorageError(f"Failed to create {backend_type} backend: {e}") from e
 
 
-_KNOWN_BACKENDS = ["sqlite", "bigquery"]
-
-
 def _load_backend(backend_type: str) -> None:
-    """
-    Lazy-load a backend implementation.
-
-    Each backend is imported only when first requested so that heavy
-    dependencies (e.g. google-cloud-bigquery) are not required unless
-    the backend is actually used.
-
-    Args:
-        backend_type: Backend type to load
-    """
+    """Lazy-load a backend implementation."""
     if backend_type == "sqlite":
         try:
             from .sqlite_backend import SQLiteBackend
-
             register_backend("sqlite", SQLiteBackend)
         except ImportError as e:
             logger.warning(f"SQLite backend not available: {e}")
-    elif backend_type == "bigquery":
-        try:
-            from .bigquery_backend import BigQueryBackend
-
-            register_backend("bigquery", BigQueryBackend)
-        except ImportError as e:
-            logger.warning(f"BigQuery backend not available: {e}")
 
 
 def _get_default_kwargs(backend_type: str) -> dict:
-    """
-    Get default constructor arguments from settings.
-
-    Args:
-        backend_type: Backend type
-
-    Returns:
-        Dictionary of constructor arguments
-    """
+    """Get default constructor arguments from settings."""
     from ..config.settings import get_settings
-
     settings = get_settings()
-
-    if backend_type == settings.storage_backend:
-        return settings.backend_kwargs()
 
     if backend_type == "sqlite":
         return {"db_path": Path(settings.sqlite_db_path)}
-    elif backend_type == "bigquery":
-        return {
-            "project_id": settings.gcp_project_id,
-            "credentials_path": (
-                str(settings.service_account_key_path)
-                if settings.service_account_key_path.exists()
-                else None
-            ),
-            "dataset_raw": settings.dataset_raw,
-            "dataset_report": settings.dataset_report,
-            "location": settings.gcp_location,
-        }
-    else:
-        return {}
+    return {}
 
 
 def list_available_backends() -> list[str]:
-    """
-    List all registered backend types.
-
-    Returns:
-        List of backend type identifiers.
-    """
-    for backend_type in _KNOWN_BACKENDS:
+    """List all registered backend types."""
+    for backend_type in ["sqlite"]:
         if backend_type not in _BACKEND_REGISTRY:
             _load_backend(backend_type)
-
     return list(_BACKEND_REGISTRY.keys())
 
 
 def is_backend_available(backend_type: str) -> bool:
-    """
-    Check if a specific backend is available.
-
-    Args:
-        backend_type: Backend type to check
-
-    Returns:
-        True if backend can be loaded, False otherwise.
-    """
+    """Check if a specific backend is available."""
     backend_type = backend_type.lower()
-
     if backend_type not in _BACKEND_REGISTRY:
         _load_backend(backend_type)
-
     return backend_type in _BACKEND_REGISTRY

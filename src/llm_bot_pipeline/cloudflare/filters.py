@@ -1,7 +1,8 @@
 """
-Cloudflare Cloudflare filter definitions for LLM bot traffic.
+Cloudflare filter definitions for LLM bot traffic.
 
-Builds filter expressions to extract verified LLM bot traffic from http_requests dataset.
+Builds filter expressions for the Cloudflare Logpush/Logpull API.
+Bot classification is done at the processing stage via user-agent matching.
 """
 
 import json
@@ -10,34 +11,19 @@ from typing import Any
 from ..config.constants import LLM_BOT_NAMES
 
 
-def build_verified_bot_filter() -> dict[str, Any]:
-    """
-    Build Cloudflare filter for verified bot traffic.
-
-    Returns filter that matches: VerifiedBot = true
-
-    Returns:
-        Filter dictionary for Cloudflare Cloudflare API
-    """
-    return {"where": {"key": "VerifiedBot", "operator": "eq", "value": True}}
-
-
 def build_llm_bot_filter() -> dict[str, Any]:
     """
-    Build Cloudflare filter for verified LLM bot traffic.
+    Build Cloudflare filter for LLM bot traffic.
 
-    Creates filter that matches:
-    - VerifiedBot = true (ensures only verified bots)
-
-    Note: Additional user-agent filtering is done at the SQLite processing
-    stage since Cloudflare filters don't support string contains on user-agent.
+    Returns an empty filter — all bot classification is done at the
+    processing stage via user-agent pattern matching against
+    BOT_CLASSIFICATION, since the Cloudflare API does not support
+    string-contains on user-agent.
 
     Returns:
-        Filter dictionary for Cloudflare Cloudflare API
+        Filter dictionary for Cloudflare API (empty)
     """
-    # The API doesn't support 'contains' operator for user-agent filtering.
-    # We filter for verified bots here, then further classify in SQLite.
-    return build_verified_bot_filter()
+    return {}
 
 
 def get_filter_json() -> str:

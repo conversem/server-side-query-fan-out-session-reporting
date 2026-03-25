@@ -207,14 +207,12 @@ class TestStatsTracking:
 
 
 class TestExtraFieldsMapped:
-    """BotScore, VerifiedBot, ClientCountry from extra dict."""
+    """ClientCountry from extra dict."""
 
     def test_extra_fields_mapped(self):
         record = make_record(
             user_agent="GPTBot/1.0",
             extra={
-                "BotScore": 95,
-                "VerifiedBot": 1,
                 "ClientCountry": "US",
             },
         )
@@ -222,8 +220,6 @@ class TestExtraFieldsMapped:
         result = transformer.transform(record)
 
         assert result is not None
-        assert result["bot_score"] == 95
-        assert result["is_verified_bot"] == 1
         assert result["crawler_country"] == "US"
 
     def test_extra_fields_defaults(self):
@@ -232,8 +228,6 @@ class TestExtraFieldsMapped:
         result = transformer.transform(record)
 
         assert result is not None
-        assert result["bot_score"] is None
-        assert result["is_verified_bot"] == 0
         assert result["crawler_country"] == ""
 
 

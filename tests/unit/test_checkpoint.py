@@ -90,8 +90,6 @@ class TestLocalPipelineCheckpointing:
                 "bot_name": "GPTBot",
                 "bot_provider": "OpenAI",
                 "bot_category": "training",
-                "bot_score": 1,
-                "is_verified_bot": 1,
                 "crawler_country": "US",
                 "response_status": 200,
                 "response_status_category": "success",
@@ -103,7 +101,7 @@ class TestLocalPipelineCheckpointing:
         raw.query = MagicMock(
             side_effect=[
                 [{"cnt": 1}],
-                [{"total_rows": 1, "verified_bots": 1, "unique_user_agents": 1}],
+                [{"total_rows": 1, "unique_user_agents": 1}],
                 [{"cnt": 1}],
                 transform_row,
             ]
@@ -149,7 +147,7 @@ class TestLocalPipelineCheckpointing:
         raw.query = MagicMock(
             side_effect=[
                 [{"cnt": 100}],
-                [{"total_rows": 100, "verified_bots": 50, "unique_user_agents": 10}],
+                [{"total_rows": 100, "unique_user_agents": 10}],
             ]
         )
         raw.table_exists = MagicMock(return_value=True)
