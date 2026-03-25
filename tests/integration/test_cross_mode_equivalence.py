@@ -103,8 +103,6 @@ def _raw_to_ingestion_record(raw: dict) -> IngestionRecord:
         status_code=raw["EdgeResponseStatus"],
         user_agent=raw["ClientRequestUserAgent"],
         extra={
-            "BotScore": raw.get("BotScore"),
-            "VerifiedBot": raw.get("VerifiedBot", 0),
             "ClientCountry": raw.get("ClientCountry", ""),
         },
     )
@@ -117,7 +115,6 @@ _EQUIVALENCE_FIELDS = (
     "bot_category",
     "bot_name",
     "bot_provider",
-    "bot_score",
     "crawler_country",
     "day_of_week",
     "request_date",
@@ -321,11 +318,10 @@ class TestCrossModeEquivalence:
             "bot_name",
             "bot_provider",
             "bot_category",
-            "bot_score",
-            "is_verified_bot",
             "crawler_country",
             "response_status",
             "response_status_category",
+            "resource_type",
             "_processed_at",
         }
 

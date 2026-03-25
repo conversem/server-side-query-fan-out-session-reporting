@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.1] - 2026-03-13
+
+### Changed
+
+- **Cloudflare Logpull/Logpush** — removed legacy Enterprise Bot Management fields
+  (`bot_score`, `is_verified_bot`, `BotScore`, `VerifiedBot`) from all schemas, pipeline
+  stages, and storage backends; `build_llm_bot_filter()` now returns `{}` (no pre-filter);
+  LLM bot classification is done entirely post-ingestion via user-agent pattern matching.
+  Resolves a deployment failure caused by referencing unavailable Enterprise fields.
+- **`filters.py`** — `build_llm_bot_filter()` documented as intentional no-op; Cloudflare
+  API does not support string-contains on user-agent, so filtering is applied post-ingest.
+
 ## [2.1.0] - 2026-03-13
 
 ### Added

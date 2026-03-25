@@ -82,8 +82,6 @@ class TestCleanRecordOperations:
                 "bot_name": "GPTBot",
                 "bot_provider": "OpenAI",
                 "bot_category": "training",
-                "bot_score": 5,
-                "is_verified_bot": 1,
                 "crawler_country": "US",
                 "response_status": 200,
                 "response_status_category": "2xx_success",
@@ -161,7 +159,7 @@ class TestQueryOperations:
 
         # Update a non-existent record
         affected = backend.execute(
-            "UPDATE raw_bot_requests SET BotScore = 99 WHERE ClientCountry = 'XX'"
+            "UPDATE raw_bot_requests SET EdgeResponseStatus = 99 WHERE ClientCountry = 'XX'"
         )
         assert affected == 0
 

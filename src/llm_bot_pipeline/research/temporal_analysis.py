@@ -187,7 +187,6 @@ class EnrichedBundle(Bundle):
     # Fingerprint fields (all have defaults for dataclass inheritance)
     client_ips: list[str] = field(default_factory=list)
     response_statuses: list[int] = field(default_factory=list)
-    bot_scores: list[float] = field(default_factory=list)
     countries: list[str] = field(default_factory=list)
     bot_tags: list[str] = field(default_factory=list)
     bot_name: Optional[str] = None
@@ -235,14 +234,6 @@ class EnrichedBundle(Bundle):
         """
         return compute_categorical_consistency(self.response_statuses)
 
-    def bot_score_consistency(self) -> float:
-        """
-        Compute consistency of bot scores.
-
-        Uses coefficient of variation to measure spread.
-        """
-        return compute_numerical_consistency(self.bot_scores)
-
     def country_consistency(self) -> float:
         """
         Compute consistency of request countries.
@@ -272,7 +263,6 @@ class EnrichedBundle(Bundle):
             "ip_homogeneity": self.ip_homogeneity,
             "subnet_homogeneity": self.subnet_homogeneity,
             "response_status_consistency": self.response_status_consistency(),
-            "bot_score_consistency": self.bot_score_consistency(),
             "country_consistency": self.country_consistency(),
             "bot_tags_consistency": self.bot_tags_consistency(),
             "unique_countries": list(set(c for c in self.countries if c)),
@@ -287,7 +277,6 @@ class EnrichedBundle(Bundle):
         bundle: Bundle,
         client_ips: Optional[list[str]] = None,
         response_statuses: Optional[list[int]] = None,
-        bot_scores: Optional[list[float]] = None,
         countries: Optional[list[str]] = None,
         bot_tags: Optional[list[str]] = None,
         bot_name: Optional[str] = None,
@@ -299,7 +288,6 @@ class EnrichedBundle(Bundle):
             bundle: Source Bundle object
             client_ips: List of client IP addresses
             response_statuses: List of HTTP response status codes
-            bot_scores: List of bot scores
             countries: List of country codes
             bot_tags: List of bot tags
             bot_name: Bot name (e.g., "ChatGPT-User")
@@ -317,7 +305,6 @@ class EnrichedBundle(Bundle):
             request_indices=bundle.request_indices,
             client_ips=client_ips or [],
             response_statuses=response_statuses or [],
-            bot_scores=bot_scores or [],
             countries=countries or [],
             bot_tags=bot_tags or [],
             bot_name=bot_name,

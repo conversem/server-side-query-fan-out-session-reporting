@@ -129,7 +129,6 @@ class TestDataQualityChecker:
                     "total_rows": 500,
                     "invalid_request_hour": 0,
                     "invalid_response_status": 0,
-                    "invalid_bot_score": 0,
                 }
             ],
             [

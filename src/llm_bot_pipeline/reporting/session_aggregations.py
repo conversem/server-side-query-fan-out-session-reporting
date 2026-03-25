@@ -244,11 +244,6 @@ class SessionAggregator:
                 if "response_status" in bundle_df.columns
                 else []
             )
-            bot_scores = (
-                bundle_df["bot_score"].tolist()
-                if "bot_score" in bundle_df.columns
-                else []
-            )
             countries = (
                 bundle_df["client_country"].tolist()
                 if "client_country" in bundle_df.columns
@@ -269,7 +264,6 @@ class SessionAggregator:
                 bundle,
                 client_ips=client_ips,
                 response_statuses=response_statuses,
-                bot_scores=bot_scores,
                 countries=countries,
                 bot_tags=bot_tags,
                 bot_name=bot_name,

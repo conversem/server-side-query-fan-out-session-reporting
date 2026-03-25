@@ -100,8 +100,6 @@ def db_with_processed_data(tmp_path):
                 "bot_name": "ChatGPT-User",
                 "bot_provider": "OpenAI",
                 "bot_category": "user_request",
-                "bot_score": 1,
-                "is_verified_bot": 1,
                 "crawler_country": "US",
                 "response_status": 200,
                 "response_status_category": "success",

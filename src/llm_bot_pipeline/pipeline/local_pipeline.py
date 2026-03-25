@@ -252,7 +252,6 @@ class LocalPipeline(
                 date_range=(start_date, end_date),
             )
             raise
-        logger.info(f"  Verified bots: {stats.get('verified_bots', 0):,}")
         logger.info(f"  Unique user agents: {stats.get('unique_user_agents', 0):,}")
 
         if dry_run:

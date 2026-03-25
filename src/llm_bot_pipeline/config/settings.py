@@ -631,7 +631,11 @@ def get_settings(config_path: Optional[str] = None) -> Settings:
     Returns:
         Settings instance.
     """
-    from .secret_manager import is_secret_manager_enabled, load_from_secret_manager
+    try:
+        from .secret_manager import is_secret_manager_enabled, load_from_secret_manager
+    except ImportError:
+        is_secret_manager_enabled = lambda: False
+        load_from_secret_manager = None  # GCP Secret Manager not available
 
     if is_secret_manager_enabled():
         try:

@@ -14,10 +14,6 @@ RAW_BOT_REQUESTS_COLUMNS = {
     "ClientRequestHost": "TEXT",
     "domain": "TEXT",
     "ClientRequestUserAgent": "TEXT",
-    "BotScore": "INTEGER",
-    "BotScoreSrc": "TEXT",
-    "VerifiedBot": "INTEGER",  # Boolean as 0/1
-    "BotTags": "TEXT",  # JSON array
     "ClientIP": "TEXT",
     "ClientCountry": "TEXT",
     "EdgeResponseStatus": "INTEGER",

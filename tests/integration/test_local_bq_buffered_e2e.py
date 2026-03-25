@@ -146,11 +146,10 @@ class TestBufferedRawToBQ:
             "bot_name",
             "bot_provider",
             "bot_category",
-            "bot_score",
-            "is_verified_bot",
             "crawler_country",
             "response_status",
             "response_status_category",
+            "resource_type",
             "_processed_at",
         }
 

@@ -379,14 +379,14 @@ class SQLiteBackend(StorageBackend):
         sql = """
             INSERT INTO raw_bot_requests (
                 EdgeStartTimestamp, ClientRequestURI, ClientRequestHost,
-                ClientRequestUserAgent, BotScore, BotScoreSrc, VerifiedBot,
-                BotTags, ClientIP, ClientCountry, EdgeResponseStatus,
-                RayID, _ingestion_time, source_provider, domain
+                ClientRequestUserAgent, ClientIP, ClientCountry,
+                EdgeResponseStatus, RayID, _ingestion_time,
+                source_provider, domain
             ) VALUES (
                 :EdgeStartTimestamp, :ClientRequestURI, :ClientRequestHost,
-                :ClientRequestUserAgent, :BotScore, :BotScoreSrc, :VerifiedBot,
-                :BotTags, :ClientIP, :ClientCountry, :EdgeResponseStatus,
-                :RayID, :_ingestion_time, :source_provider, :domain
+                :ClientRequestUserAgent, :ClientIP, :ClientCountry,
+                :EdgeResponseStatus, :RayID, :_ingestion_time,
+                :source_provider, :domain
             )
         """
 
@@ -402,10 +402,6 @@ class SQLiteBackend(StorageBackend):
                 "ClientRequestURI": record.get("ClientRequestURI"),
                 "ClientRequestHost": record.get("ClientRequestHost"),
                 "ClientRequestUserAgent": record.get("ClientRequestUserAgent"),
-                "BotScore": record.get("BotScore"),
-                "BotScoreSrc": record.get("BotScoreSrc"),
-                "VerifiedBot": _to_sqlite_bool(record.get("VerifiedBot")),
-                "BotTags": _to_sqlite_json(record.get("BotTags")),
                 "ClientIP": record.get("ClientIP"),
                 "ClientCountry": record.get("ClientCountry"),
                 "EdgeResponseStatus": record.get("EdgeResponseStatus"),
@@ -542,16 +538,14 @@ class SQLiteBackend(StorageBackend):
                 request_timestamp, request_date, request_hour, day_of_week,
                 request_uri, request_host, domain, url_path, url_path_depth,
                 user_agent_raw, bot_name, bot_provider, bot_category,
-                bot_score, is_verified_bot, crawler_country,
-                response_status, response_status_category,
-                resource_type, _processed_at
+                crawler_country, response_status,
+                response_status_category, resource_type, _processed_at
             ) VALUES (
                 :request_timestamp, :request_date, :request_hour, :day_of_week,
                 :request_uri, :request_host, :domain, :url_path, :url_path_depth,
                 :user_agent_raw, :bot_name, :bot_provider, :bot_category,
-                :bot_score, :is_verified_bot, :crawler_country,
-                :response_status, :response_status_category,
-                :resource_type, :_processed_at
+                :crawler_country, :response_status,
+                :response_status_category, :resource_type, :_processed_at
             )
         """
 
@@ -575,8 +569,6 @@ class SQLiteBackend(StorageBackend):
                 "bot_name": record.get("bot_name"),
                 "bot_provider": record.get("bot_provider"),
                 "bot_category": record.get("bot_category"),
-                "bot_score": record.get("bot_score"),
-                "is_verified_bot": _to_sqlite_bool(record.get("is_verified_bot")),
                 "crawler_country": record.get("crawler_country"),
                 "response_status": record.get("response_status"),
                 "response_status_category": record.get("response_status_category"),

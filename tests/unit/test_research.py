@@ -52,7 +52,6 @@ def _make_enriched_bundle(
             else client_ips + [""] * (n - len(client_ips))
         ),
         response_statuses=[200] * n,
-        bot_scores=[0.9] * n,
         countries=(
             countries[:n]
             if len(countries) >= n

@@ -134,8 +134,6 @@ class PythonTransformer:
             "bot_name": classification.bot_name,
             "bot_provider": classification.bot_provider,
             "bot_category": classification.bot_category,
-            "bot_score": record.extra.get("BotScore"),
-            "is_verified_bot": record.extra.get("VerifiedBot", 0),
             "crawler_country": record.extra.get("ClientCountry", ""),
             "response_status": record.status_code,
             "response_status_category": _status_category(record.status_code),

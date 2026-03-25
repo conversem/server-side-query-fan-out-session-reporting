@@ -92,13 +92,6 @@ OUTPUT_FIELDS = [
     "RayID",
 ]
 
-# Full field set for Logpush (requires Enterprise plan with Bot Management add-on)
-LOGPUSH_FIELDS = OUTPUT_FIELDS + [
-    "BotScore",
-    "BotScoreSrc",
-    "VerifiedBot",
-    "BotTags",
-]
 
 # =============================================================================
 # Table Names (shared across backends)
