@@ -94,3 +94,6 @@ docs/planning/
 # Cursor - ignore internal state but keep rules
 .cursor/*
 !.cursor/rules/
+# Test artifacts
+.tmp/
+data/dead_letter.jsonl
