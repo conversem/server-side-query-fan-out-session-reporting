@@ -338,7 +338,13 @@ class TestReportingViews:
         """v_session_url_distribution should have expected columns."""
         columns = sqlite_backend.query("PRAGMA table_info(v_session_url_distribution)")
         column_names = {col["name"] for col in columns}
-        expected = {"session_date", "url_bucket", "sort_order", "session_count"}
+        expected = {
+            "session_date",
+            "domain",
+            "url_bucket",
+            "sort_order",
+            "session_count",
+        }
         assert expected == column_names
 
     def test_v_daily_kpis_has_correct_columns(self, sqlite_backend):
@@ -348,6 +354,7 @@ class TestReportingViews:
 
         expected_columns = {
             "session_date",
+            "domain",
             "total_sessions",
             "unique_urls_requested",
             "avg_urls_per_session",
@@ -371,7 +378,9 @@ class TestReportingViews:
         expected_columns = {
             "session_id",
             "session_date",
+            "domain",
             "url",
+            "full_url",
             "bot_name",
             "topic",
             "session_unique_urls",

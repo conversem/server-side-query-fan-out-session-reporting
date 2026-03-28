@@ -87,12 +87,13 @@ class SitemapAggregator:
 
             sql = f"""
                 INSERT INTO {freshness}
-                    (url_path, lastmod, lastmod_month, sitemap_source,
+                    (url_path, domain, lastmod, lastmod_month, sitemap_source,
                      first_seen_date, last_seen_date,
                      request_count, unique_urls, unique_bots,
                      days_since_lastmod, _aggregated_at)
                 SELECT
                     sm.url_path,
+                    sm.domain,
                     sm.lastmod,
                     sm.lastmod_month,
                     sm.sitemap_source,
@@ -109,9 +110,9 @@ class SitemapAggregator:
                     {self._current_timestamp()} AS _aggregated_at
                 FROM {sitemap} sm
                 LEFT JOIN {clean} br
-                    ON sm.url_path = br.url_path
+                    ON sm.url_path = br.url_path AND sm.domain = br.domain
                 GROUP BY
-                    sm.url_path, sm.lastmod, sm.lastmod_month,
+                    sm.url_path, sm.domain, sm.lastmod, sm.lastmod_month,
                     sm.sitemap_source
             """
             rows = self._backend.execute(sql)
@@ -178,12 +179,13 @@ class SitemapAggregator:
 
             sql = f"""
                 INSERT INTO {decay}
-                    (url_path, period, period_start,
+                    (url_path, domain, period, period_start,
                      request_count, unique_urls, unique_bots,
                      prev_request_count, decay_rate,
                      _aggregated_at)
                 SELECT
                     sub.url_path,
+                    sub.domain,
                     :period AS period,
                     sub.period_start,
                     sub.request_count,
@@ -195,15 +197,16 @@ class SitemapAggregator:
                 FROM (
                     SELECT
                         sm.url_path,
+                        sm.domain,
                         {period_expr} AS period_start,
                         COUNT(*) AS request_count,
                         COUNT(DISTINCT br.request_uri) AS unique_urls,
                         COUNT(DISTINCT br.bot_provider) AS unique_bots
                     FROM {sitemap} sm
                     INNER JOIN {clean} br
-                        ON sm.url_path = br.url_path
+                        ON sm.url_path = br.url_path AND sm.domain = br.domain
                     WHERE br.request_date >= :cutoff
-                    GROUP BY sm.url_path, {period_expr}
+                    GROUP BY sm.url_path, sm.domain, {period_expr}
                 ) sub
             """
             self._backend.execute(sql, {"period": period_label, "cutoff": cutoff})
@@ -261,27 +264,30 @@ class SitemapAggregator:
     # Looker Studio / dashboard query helpers
     # ------------------------------------------------------------------
 
-    def get_freshness_heatmap(self) -> list[dict]:
+    def get_freshness_heatmap(self, domain: Optional[str] = None) -> list[dict]:
         """Freshness heatmap: URL freshness vs crawl frequency.
 
-        Returns rows with url_path, lastmod_month, request_count,
+        Returns rows with url_path, domain, lastmod_month, request_count,
         unique_bots, days_since_lastmod for visualization.
         """
         freshness = self._table(TABLE_SITEMAP_FRESHNESS)
+        where = "WHERE request_count > 0"
+        params: dict = {}
+        if domain:
+            where += " AND domain = :domain"
+            params["domain"] = domain
         sql = f"""
-            SELECT
-                url_path,
-                lastmod_month,
-                request_count,
-                unique_bots,
-                days_since_lastmod
+            SELECT url_path, domain, lastmod_month, request_count,
+                   unique_bots, days_since_lastmod
             FROM {freshness}
-            WHERE request_count > 0
+            {where}
             ORDER BY days_since_lastmod DESC NULLS LAST, request_count DESC
         """
-        return self._backend.query(sql)
+        return self._backend.query(sql, params or None)
 
-    def get_decay_curves(self, period: str = "month") -> list[dict]:
+    def get_decay_curves(
+        self, period: str = "month", domain: Optional[str] = None
+    ) -> list[dict]:
         """Decay curves: request volume over time per URL cohort.
 
         Groups by lastmod_month to show how request volume changes
@@ -289,66 +295,75 @@ class SitemapAggregator:
 
         Args:
             period: 'week' or 'month'.
+            domain: Optional domain filter.
         """
         decay = self._table(TABLE_URL_VOLUME_DECAY)
         freshness = self._table(TABLE_SITEMAP_FRESHNESS)
+        domain_filter = "AND sf.domain = :domain" if domain else ""
+        params: dict = {"period": period}
+        if domain:
+            params["domain"] = domain
         sql = f"""
-            SELECT
-                sf.lastmod_month,
-                vd.period_start,
-                SUM(vd.request_count) AS total_requests,
-                COUNT(DISTINCT vd.url_path) AS url_count,
-                AVG(vd.decay_rate) AS avg_decay_rate
+            SELECT sf.lastmod_month, sf.domain, vd.period_start,
+                   SUM(vd.request_count) AS total_requests,
+                   COUNT(DISTINCT vd.url_path) AS url_count,
+                   AVG(vd.decay_rate) AS avg_decay_rate
             FROM {decay} vd
             INNER JOIN {freshness} sf
-                ON vd.url_path = sf.url_path
+                ON vd.url_path = sf.url_path AND vd.domain = sf.domain
             WHERE vd.period = :period
                 AND sf.lastmod_month IS NOT NULL
-            GROUP BY sf.lastmod_month, vd.period_start
+                {domain_filter}
+            GROUP BY sf.lastmod_month, sf.domain, vd.period_start
             ORDER BY sf.lastmod_month DESC, vd.period_start
         """
-        return self._backend.query(sql, {"period": period})
+        return self._backend.query(sql, params)
 
-    def get_coverage_gaps(self) -> list[dict]:
+    def get_coverage_gaps(self, domain: Optional[str] = None) -> list[dict]:
         """Coverage gaps: sitemap URLs with zero bot requests."""
         freshness = self._table(TABLE_SITEMAP_FRESHNESS)
+        where = "WHERE request_count = 0"
+        params: dict = {}
+        if domain:
+            where += " AND domain = :domain"
+            params["domain"] = domain
         sql = f"""
-            SELECT
-                url_path,
-                lastmod,
-                lastmod_month,
-                sitemap_source,
-                days_since_lastmod
+            SELECT url_path, domain, lastmod, lastmod_month,
+                   sitemap_source, days_since_lastmod
             FROM {freshness}
-            WHERE request_count = 0
+            {where}
             ORDER BY days_since_lastmod ASC NULLS LAST
         """
-        return self._backend.query(sql)
+        return self._backend.query(sql, params or None)
 
-    def get_freshness_summary(self) -> list[dict]:
+    def get_freshness_summary(self, domain: Optional[str] = None) -> list[dict]:
         """Summary statistics for Looker Studio overview.
 
-        Returns per-lastmod_month aggregates: total URLs, requested URLs,
-        coverage percentage, average days since lastmod.
+        Returns per-lastmod_month and per-domain aggregates: total URLs,
+        requested URLs, coverage percentage, average days since lastmod.
         """
         freshness = self._table(TABLE_SITEMAP_FRESHNESS)
+        where = "WHERE lastmod_month IS NOT NULL"
+        params: dict = {}
+        if domain:
+            where += " AND domain = :domain"
+            params["domain"] = domain
         sql = f"""
-            SELECT
-                lastmod_month,
-                COUNT(*) AS total_urls,
-                SUM(CASE WHEN request_count > 0 THEN 1 ELSE 0 END) AS requested_urls,
-                ROUND(
-                    100.0 * SUM(CASE WHEN request_count > 0 THEN 1 ELSE 0 END)
-                    / COUNT(*), 1
-                ) AS coverage_pct,
-                AVG(request_count) AS avg_requests,
-                AVG(days_since_lastmod) AS avg_days_since_lastmod
+            SELECT lastmod_month, domain,
+                   COUNT(*) AS total_urls,
+                   SUM(CASE WHEN request_count > 0 THEN 1 ELSE 0 END) AS requested_urls,
+                   ROUND(
+                       100.0 * SUM(CASE WHEN request_count > 0 THEN 1 ELSE 0 END)
+                       / COUNT(*), 1
+                   ) AS coverage_pct,
+                   AVG(request_count) AS avg_requests,
+                   AVG(days_since_lastmod) AS avg_days_since_lastmod
             FROM {freshness}
-            WHERE lastmod_month IS NOT NULL
-            GROUP BY lastmod_month
+            {where}
+            GROUP BY lastmod_month, domain
             ORDER BY lastmod_month DESC
         """
-        return self._backend.query(sql)
+        return self._backend.query(sql, params or None)
 
     # ------------------------------------------------------------------
     # SQL dialect helpers (backend-specific expressions)
@@ -401,12 +416,14 @@ class SitemapAggregator:
                     END
                 FROM {decay} prev
                 WHERE cur.url_path = prev.url_path
+                    AND cur.domain = prev.domain
                     AND cur.period = prev.period
                     AND cur.period = '{period_label}'
                     AND prev.period_start = (
                         SELECT MAX(p2.period_start)
                         FROM {decay} p2
                         WHERE p2.url_path = cur.url_path
+                            AND p2.domain = cur.domain
                             AND p2.period = cur.period
                             AND p2.period_start < cur.period_start
                     )
@@ -420,6 +437,7 @@ class SitemapAggregator:
                         SELECT prev.request_count
                         FROM {bare} prev
                         WHERE prev.url_path = {bare}.url_path
+                            AND prev.domain = {bare}.domain
                             AND prev.period = {bare}.period
                             AND prev.period_start < {bare}.period_start
                         ORDER BY prev.period_start DESC
@@ -430,6 +448,7 @@ class SitemapAggregator:
                             SELECT prev.request_count
                             FROM {bare} prev
                             WHERE prev.url_path = {bare}.url_path
+                                AND prev.domain = {bare}.domain
                                 AND prev.period = {bare}.period
                                 AND prev.period_start < {bare}.period_start
                             ORDER BY prev.period_start DESC
@@ -440,6 +459,7 @@ class SitemapAggregator:
                                 SELECT prev.request_count
                                 FROM {bare} prev
                                 WHERE prev.url_path = {bare}.url_path
+                                    AND prev.domain = {bare}.domain
                                     AND prev.period = {bare}.period
                                     AND prev.period_start < {bare}.period_start
                                 ORDER BY prev.period_start DESC
@@ -448,6 +468,7 @@ class SitemapAggregator:
                                 SELECT prev.request_count
                                 FROM {bare} prev
                                 WHERE prev.url_path = {bare}.url_path
+                                    AND prev.domain = {bare}.domain
                                     AND prev.period = {bare}.period
                                     AND prev.period_start < {bare}.period_start
                                 ORDER BY prev.period_start DESC

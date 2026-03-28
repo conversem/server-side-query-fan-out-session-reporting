@@ -2,6 +2,7 @@
 
 import logging
 from typing import Optional
+from urllib.parse import urlparse
 
 from .parser import SitemapEntry, fetch_sitemap, normalize_url_path
 
@@ -14,6 +15,12 @@ __all__ = [
 ]
 
 logger = logging.getLogger(__name__)
+
+
+def _extract_domain(sitemap_url: str) -> str:
+    """Extract domain from a sitemap URL, stripping www. prefix."""
+    hostname = urlparse(sitemap_url).hostname or ""
+    return hostname.removeprefix("www.")
 
 
 def fetch_and_store_sitemaps(
@@ -30,16 +37,17 @@ def fetch_and_store_sitemaps(
         Dict with keys: success, urls_stored, errors
     """
     errors = []
-    all_entries = []
+    all_entries: list[tuple[str, "SitemapEntry"]] = []
 
-    for url in sitemap_urls:
+    for sitemap_url in sitemap_urls:
         try:
-            entries = fetch_sitemap(url)
-            all_entries.extend(entries)
-            logger.info(f"Fetched {len(entries)} URLs from {url}")
+            entries = fetch_sitemap(sitemap_url)
+            domain = _extract_domain(sitemap_url)
+            all_entries.extend((domain, e) for e in entries)
+            logger.info(f"Fetched {len(entries)} URLs from {sitemap_url}")
         except Exception as e:
-            logger.warning(f"Failed to fetch sitemap {url}: {e}")
-            errors.append(f"{url}: {e}")
+            logger.warning(f"Failed to fetch sitemap {sitemap_url}: {e}")
+            errors.append(f"{sitemap_url}: {e}")
 
     if not all_entries:
         logger.info("No sitemap URLs found")
@@ -49,11 +57,12 @@ def fetch_and_store_sitemaps(
         {
             "url": e.url,
             "url_path": e.url_path,
+            "domain": domain,
             "lastmod": e.lastmod,
             "lastmod_month": e.lastmod_month,
             "sitemap_source": e.sitemap_source,
         }
-        for e in all_entries
+        for domain, e in all_entries
     ]
 
     count = backend.insert_sitemap_urls(entry_dicts)
