@@ -588,7 +588,7 @@ class SQLiteBackend(StorageBackend):
         Uses INSERT OR REPLACE so re-fetching a sitemap updates lastmod values.
 
         Args:
-            entries: List of dicts with keys: url, url_path, lastmod,
+            entries: List of dicts with keys: url, url_path, domain, lastmod,
                      lastmod_month, sitemap_source
 
         Returns:
@@ -601,9 +601,9 @@ class SQLiteBackend(StorageBackend):
 
         sql = """
             INSERT OR REPLACE INTO sitemap_urls
-                (url, url_path, lastmod, lastmod_month, sitemap_source, _fetched_at)
+                (url, url_path, domain, lastmod, lastmod_month, sitemap_source, _fetched_at)
             VALUES
-                (:url, :url_path, :lastmod, :lastmod_month, :sitemap_source, datetime('now'))
+                (:url, :url_path, :domain, :lastmod, :lastmod_month, :sitemap_source, datetime('now'))
         """
 
         with self._cursor() as cursor:

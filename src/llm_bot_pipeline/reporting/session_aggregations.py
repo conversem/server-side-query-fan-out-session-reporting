@@ -772,13 +772,13 @@ class SessionAggregator:
         table_ref = self._get_refinement_log_table_ref()
         sql = f"""
             INSERT INTO {table_ref} (
-                window_ms, total_bundles, collision_candidates,
+                run_timestamp, window_ms, total_bundles, collision_candidates,
                 bundles_split, sub_bundles_created, mean_mibcs_improvement,
                 refinement_duration_ms, collision_ip_threshold,
                 collision_homogeneity_threshold, similarity_threshold,
                 min_sub_bundle_size, min_mibcs_improvement
             ) VALUES (
-                :window_ms, :total_bundles, :collision_candidates,
+                :run_timestamp, :window_ms, :total_bundles, :collision_candidates,
                 :bundles_split, :sub_bundles_created, :mean_mibcs_improvement,
                 :refinement_duration_ms, :collision_ip_threshold,
                 :collision_homogeneity_threshold, :similarity_threshold,
@@ -790,6 +790,7 @@ class SessionAggregator:
             self._backend.execute(
                 sql,
                 {
+                    "run_timestamp": datetime.now(timezone.utc),
                     "window_ms": window_ms,
                     "total_bundles": metrics.bundles_analyzed,
                     "collision_candidates": metrics.collision_candidates,

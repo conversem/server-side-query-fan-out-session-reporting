@@ -161,11 +161,12 @@ CREATE TABLE IF NOT EXISTS sitemap_urls (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     url TEXT NOT NULL,
     url_path TEXT NOT NULL,
+    domain TEXT,
     lastmod TEXT,
     lastmod_month TEXT,
     sitemap_source TEXT NOT NULL,
     _fetched_at TEXT NOT NULL DEFAULT (datetime('now')),
-    UNIQUE(url_path)
+    UNIQUE(domain, url_path)
 )
 """
 
@@ -173,6 +174,7 @@ SITEMAP_FRESHNESS_SCHEMA = """
 CREATE TABLE IF NOT EXISTS sitemap_freshness (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     url_path TEXT NOT NULL,
+    domain TEXT,
     lastmod TEXT,
     lastmod_month TEXT,
     sitemap_source TEXT NOT NULL,
@@ -183,7 +185,7 @@ CREATE TABLE IF NOT EXISTS sitemap_freshness (
     unique_bots INTEGER NOT NULL DEFAULT 0,
     days_since_lastmod INTEGER,
     _aggregated_at TEXT NOT NULL DEFAULT (datetime('now')),
-    UNIQUE(url_path)
+    UNIQUE(domain, url_path)
 )
 """
 
@@ -191,6 +193,7 @@ URL_VOLUME_DECAY_SCHEMA = """
 CREATE TABLE IF NOT EXISTS url_volume_decay (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     url_path TEXT NOT NULL,
+    domain TEXT,
     period TEXT NOT NULL,
     period_start TEXT NOT NULL,
     request_count INTEGER NOT NULL DEFAULT 0,
@@ -199,7 +202,7 @@ CREATE TABLE IF NOT EXISTS url_volume_decay (
     prev_request_count INTEGER,
     decay_rate REAL,
     _aggregated_at TEXT NOT NULL DEFAULT (datetime('now')),
-    UNIQUE(url_path, period, period_start)
+    UNIQUE(domain, url_path, period, period_start)
 )
 """
 
@@ -238,6 +241,7 @@ VIEW_SESSION_URL_DISTRIBUTION = """
 CREATE VIEW IF NOT EXISTS v_session_url_distribution AS
 SELECT
     session_date,
+    domain,
     CASE
         WHEN unique_urls = 1 THEN '1 (Singleton)'
         WHEN unique_urls = 2 THEN '2'
@@ -252,24 +256,26 @@ SELECT
     END AS sort_order,
     COUNT(*) AS session_count
 FROM query_fanout_sessions
-GROUP BY session_date, url_bucket, sort_order
+GROUP BY session_date, domain, url_bucket, sort_order
 """
 
 VIEW_SESSION_SINGLETON_BINARY = """
 CREATE VIEW IF NOT EXISTS v_session_singleton_binary AS
 SELECT
     session_date,
+    domain,
     CASE WHEN unique_urls = 1 THEN 'Singleton (1 URL)' ELSE 'Plural (2+ URLs)' END AS session_type,
     CASE WHEN unique_urls = 1 THEN 1 ELSE 2 END AS sort_order,
     COUNT(*) AS session_count
 FROM query_fanout_sessions
-GROUP BY session_date, session_type, sort_order
+GROUP BY session_date, domain, session_type, sort_order
 """
 
 VIEW_BOT_VOLUME = """
 CREATE VIEW IF NOT EXISTS v_bot_volume AS
 SELECT
     session_date,
+    domain,
     bot_name,
     bot_provider,
     COUNT(*) AS session_count,
@@ -277,13 +283,14 @@ SELECT
     SUM(CASE WHEN unique_urls = 1 THEN 1 ELSE 0 END) AS singleton_count,
     ROUND(100.0 * SUM(CASE WHEN unique_urls = 1 THEN 1 ELSE 0 END) / COUNT(*), 2) AS singleton_rate
 FROM query_fanout_sessions
-GROUP BY session_date, bot_name, bot_provider
+GROUP BY session_date, domain, bot_name, bot_provider
 """
 
 VIEW_TOP_SESSION_TOPICS = """
 CREATE VIEW IF NOT EXISTS v_top_session_topics AS
 SELECT
     session_date,
+    domain,
     fanout_session_name AS topic,
     COUNT(*) AS session_count,
     AVG(unique_urls) AS avg_urls_per_session,
@@ -295,62 +302,70 @@ SELECT
     SUM(CASE WHEN confidence_level = 'low' THEN 1 ELSE 0 END) AS low_confidence_count
 FROM query_fanout_sessions
 WHERE fanout_session_name IS NOT NULL
-GROUP BY session_date, fanout_session_name
+GROUP BY session_date, domain, fanout_session_name
 """
 
 VIEW_DAILY_KPIS = """
 CREATE VIEW IF NOT EXISTS v_daily_kpis AS
+WITH url_counts AS (
+    SELECT session_date, domain, COUNT(DISTINCT url) AS unique_urls_requested
+    FROM session_url_details
+    GROUP BY session_date, domain
+)
 SELECT
-    session_date,
+    qfs.session_date,
+    qfs.domain,
     COUNT(*) AS total_sessions,
-    (SELECT COUNT(DISTINCT sud.url)
-     FROM session_url_details sud
-     WHERE sud.session_date = query_fanout_sessions.session_date) AS unique_urls_requested,
-    AVG(unique_urls) AS avg_urls_per_session,
-    SUM(CASE WHEN unique_urls = 1 THEN 1 ELSE 0 END) AS singleton_count,
-    ROUND(100.0 * SUM(CASE WHEN unique_urls = 1 THEN 1 ELSE 0 END) / COUNT(*), 2) AS singleton_rate,
-    SUM(CASE WHEN unique_urls > 1 THEN 1 ELSE 0 END) AS multi_url_count,
-    ROUND(100.0 * SUM(CASE WHEN unique_urls > 1 THEN 1 ELSE 0 END) / COUNT(*), 2) AS multi_url_rate,
-    AVG(CASE WHEN unique_urls > 1 THEN mean_cosine_similarity END) AS mean_mibcs_multi_url,
-    SUM(CASE WHEN confidence_level = 'high' THEN 1 ELSE 0 END) AS high_confidence_count,
-    ROUND(100.0 * SUM(CASE WHEN confidence_level = 'high' THEN 1 ELSE 0 END) / COUNT(*), 2) AS high_confidence_rate,
-    SUM(CASE WHEN confidence_level = 'medium' THEN 1 ELSE 0 END) AS medium_confidence_count,
-    SUM(CASE WHEN confidence_level = 'low' THEN 1 ELSE 0 END) AS low_confidence_count
-FROM query_fanout_sessions
-GROUP BY session_date
+    COALESCE(uc.unique_urls_requested, 0) AS unique_urls_requested,
+    AVG(qfs.unique_urls) AS avg_urls_per_session,
+    SUM(CASE WHEN qfs.unique_urls = 1 THEN 1 ELSE 0 END) AS singleton_count,
+    ROUND(100.0 * SUM(CASE WHEN qfs.unique_urls = 1 THEN 1 ELSE 0 END) / COUNT(*), 2) AS singleton_rate,
+    SUM(CASE WHEN qfs.unique_urls > 1 THEN 1 ELSE 0 END) AS multi_url_count,
+    ROUND(100.0 * SUM(CASE WHEN qfs.unique_urls > 1 THEN 1 ELSE 0 END) / COUNT(*), 2) AS multi_url_rate,
+    AVG(CASE WHEN qfs.unique_urls > 1 THEN qfs.mean_cosine_similarity END) AS mean_mibcs_multi_url,
+    SUM(CASE WHEN qfs.confidence_level = 'high' THEN 1 ELSE 0 END) AS high_confidence_count,
+    ROUND(100.0 * SUM(CASE WHEN qfs.confidence_level = 'high' THEN 1 ELSE 0 END) / COUNT(*), 2) AS high_confidence_rate,
+    SUM(CASE WHEN qfs.confidence_level = 'medium' THEN 1 ELSE 0 END) AS medium_confidence_count,
+    SUM(CASE WHEN qfs.confidence_level = 'low' THEN 1 ELSE 0 END) AS low_confidence_count
+FROM query_fanout_sessions qfs
+LEFT JOIN url_counts uc ON qfs.session_date = uc.session_date AND qfs.domain = uc.domain
+GROUP BY qfs.session_date, qfs.domain
 """
 
 VIEW_CATEGORY_COMPARISON = """
 CREATE VIEW IF NOT EXISTS v_category_comparison AS
 SELECT
     session_date AS date,
+    domain,
     'User Questions' AS category,
     COUNT(*) AS count,
     1 AS sort_order
 FROM query_fanout_sessions
-GROUP BY session_date
+GROUP BY session_date, domain
 
 UNION ALL
 
 SELECT
     request_date AS date,
+    domain,
     'Training (Unique URLs)' AS category,
     SUM(unique_urls) AS count,
     2 AS sort_order
 FROM daily_summary
 WHERE bot_category = 'training'
-GROUP BY request_date
+GROUP BY request_date, domain
 
 UNION ALL
 
 SELECT
     request_date AS date,
+    domain,
     'Search (Requests)' AS category,
     SUM(total_requests) AS count,
     3 AS sort_order
 FROM daily_summary
 WHERE bot_category = 'search'
-GROUP BY request_date
+GROUP BY request_date, domain
 """
 
 VIEW_URL_COOCCURRENCE = """
@@ -358,7 +373,9 @@ CREATE VIEW IF NOT EXISTS v_url_cooccurrence AS
 SELECT
     session_id,
     session_date,
+    domain,
     url,
+    'https://' || domain || url AS full_url,
     bot_name,
     fanout_session_name AS topic,
     session_unique_urls,
@@ -375,29 +392,31 @@ CREATE VIEW IF NOT EXISTS v_url_freshness AS
 WITH request_counts AS (
     SELECT
         sud.session_date,
+        sud.domain,
         sm.lastmod_month,
         COUNT(*) AS request_count,
         COUNT(DISTINCT sud.url) AS unique_urls_requested
     FROM session_url_details sud
-    JOIN sitemap_urls sm ON sud.url = sm.url_path
+    JOIN sitemap_urls sm ON sud.url = sm.url_path AND sud.domain = sm.domain
     WHERE sm.lastmod_month IS NOT NULL
-    GROUP BY sud.session_date, sm.lastmod_month
+    GROUP BY sud.session_date, sud.domain, sm.lastmod_month
 ),
 sitemap_totals AS (
-    SELECT lastmod_month, COUNT(*) AS total_sitemap_urls
+    SELECT domain, lastmod_month, COUNT(*) AS total_sitemap_urls
     FROM sitemap_urls
     WHERE lastmod_month IS NOT NULL
-    GROUP BY lastmod_month
+    GROUP BY domain, lastmod_month
 )
 SELECT
     rc.session_date,
+    rc.domain,
     rc.lastmod_month,
     rc.request_count,
     st.total_sitemap_urls AS urls_in_sitemap,
     rc.unique_urls_requested,
     ROUND(100.0 * rc.unique_urls_requested / st.total_sitemap_urls, 1) AS pct_requested
 FROM request_counts rc
-JOIN sitemap_totals st ON rc.lastmod_month = st.lastmod_month
+JOIN sitemap_totals st ON rc.lastmod_month = st.lastmod_month AND rc.domain = st.domain
 """
 
 VIEW_DECAY_UNIQUE_URLS = """
@@ -415,7 +434,7 @@ url_ages AS (
          - CAST(strftime('%m', sm.lastmod_month || '-01') AS INTEGER))
         AS months_ago
     FROM session_url_details sud
-    JOIN sitemap_urls sm ON sud.url = sm.url_path
+    JOIN sitemap_urls sm ON sud.url = sm.url_path AND sud.domain = sm.domain
     WHERE sm.lastmod_month IS NOT NULL
 ),
 daily_totals AS (
@@ -450,7 +469,7 @@ request_ages AS (
          - CAST(strftime('%m', sm.lastmod_month || '-01') AS INTEGER))
         AS months_ago
     FROM session_url_details sud
-    JOIN sitemap_urls sm ON sud.url = sm.url_path
+    JOIN sitemap_urls sm ON sud.url = sm.url_path AND sud.domain = sm.domain
     WHERE sm.lastmod_month IS NOT NULL
 ),
 daily_totals AS (
@@ -471,6 +490,157 @@ JOIN daily_totals dt ON ra.session_date = dt.session_date
 GROUP BY ra.session_date, mg.n
 """
 
+VIEW_DECAY_UNIQUE_URLS_BY_DOMAIN = """
+CREATE VIEW IF NOT EXISTS v_decay_unique_urls_by_domain AS
+WITH RECURSIVE months_gen(n) AS (
+    SELECT 1 UNION ALL SELECT n + 1 FROM months_gen WHERE n < 36
+),
+url_ages AS (
+    SELECT DISTINCT
+        sud.session_date,
+        sud.domain,
+        sud.url,
+        (CAST(strftime('%Y', sud.session_date) AS INTEGER)
+         - CAST(strftime('%Y', sm.lastmod_month || '-01') AS INTEGER)) * 12
+        + (CAST(strftime('%m', sud.session_date) AS INTEGER)
+         - CAST(strftime('%m', sm.lastmod_month || '-01') AS INTEGER))
+        AS months_ago
+    FROM session_url_details sud
+    JOIN sitemap_urls sm ON sud.url = sm.url_path AND sud.domain = sm.domain
+    WHERE sm.lastmod_month IS NOT NULL
+),
+daily_totals AS (
+    SELECT session_date, domain, COUNT(*) AS total_urls
+    FROM url_ages
+    GROUP BY session_date, domain
+)
+SELECT
+    ua.session_date,
+    ua.domain,
+    mg.n AS months_bucket,
+    ROUND(
+        100.0 * SUM(CASE WHEN ua.months_ago <= mg.n THEN 1 ELSE 0 END)
+        / dt.total_urls, 1
+    ) AS cumulative_pct
+FROM url_ages ua
+CROSS JOIN months_gen mg
+JOIN daily_totals dt ON ua.session_date = dt.session_date AND ua.domain = dt.domain
+GROUP BY ua.session_date, ua.domain, mg.n
+"""
+
+VIEW_DECAY_REQUEST_VOLUME_BY_DOMAIN = """
+CREATE VIEW IF NOT EXISTS v_decay_request_volume_by_domain AS
+WITH RECURSIVE months_gen(n) AS (
+    SELECT 1 UNION ALL SELECT n + 1 FROM months_gen WHERE n < 36
+),
+request_ages AS (
+    SELECT
+        sud.session_date,
+        sud.domain,
+        (CAST(strftime('%Y', sud.session_date) AS INTEGER)
+         - CAST(strftime('%Y', sm.lastmod_month || '-01') AS INTEGER)) * 12
+        + (CAST(strftime('%m', sud.session_date) AS INTEGER)
+         - CAST(strftime('%m', sm.lastmod_month || '-01') AS INTEGER))
+        AS months_ago
+    FROM session_url_details sud
+    JOIN sitemap_urls sm ON sud.url = sm.url_path AND sud.domain = sm.domain
+    WHERE sm.lastmod_month IS NOT NULL
+),
+daily_totals AS (
+    SELECT session_date, domain, COUNT(*) AS total_requests
+    FROM request_ages
+    GROUP BY session_date, domain
+)
+SELECT
+    ra.session_date,
+    ra.domain,
+    mg.n AS months_bucket,
+    ROUND(
+        100.0 * SUM(CASE WHEN ra.months_ago <= mg.n THEN 1 ELSE 0 END)
+        / dt.total_requests, 1
+    ) AS cumulative_pct
+FROM request_ages ra
+CROSS JOIN months_gen mg
+JOIN daily_totals dt ON ra.session_date = dt.session_date AND ra.domain = dt.domain
+GROUP BY ra.session_date, ra.domain, mg.n
+"""
+
+VIEW_URL_FRESHNESS_DETAIL = """
+CREATE VIEW IF NOT EXISTS v_url_freshness_detail AS
+SELECT
+    sud.session_date,
+    sud.domain,
+    sud.url AS url_path,
+    'https://' || sud.domain || sud.url AS full_url,
+    sm.lastmod_month,
+    sm.lastmod,
+    sm.sitemap_source,
+    (CAST(strftime('%Y', sud.session_date) AS INTEGER)
+     - CAST(strftime('%Y', sm.lastmod_month || '-01') AS INTEGER)) * 12
+    + (CAST(strftime('%m', sud.session_date) AS INTEGER)
+     - CAST(strftime('%m', sm.lastmod_month || '-01') AS INTEGER))
+    AS months_since_lastmod,
+    COUNT(*) AS request_count
+FROM session_url_details sud
+JOIN sitemap_urls sm ON sud.url = sm.url_path AND sud.domain = sm.domain
+WHERE sm.lastmod_month IS NOT NULL
+GROUP BY 1, 2, 3, 4, 5, 6, 7, 8
+"""
+
+VIEW_SESSIONS_BY_CONTENT_AGE = """
+CREATE VIEW IF NOT EXISTS v_sessions_by_content_age AS
+SELECT
+    qfs.session_date,
+    qfs.domain,
+    sud.url AS url_path,
+    'https://' || qfs.domain || sud.url AS full_url,
+    sm.lastmod_month,
+    sm.lastmod,
+    sm.sitemap_source,
+    (CAST(strftime('%Y', qfs.session_date) AS INTEGER)
+     - CAST(strftime('%Y', sm.lastmod_month || '-01') AS INTEGER)) * 12
+    + (CAST(strftime('%m', qfs.session_date) AS INTEGER)
+     - CAST(strftime('%m', sm.lastmod_month || '-01') AS INTEGER))
+    AS months_since_lastmod,
+    COUNT(DISTINCT qfs.session_id) AS session_count,
+    SUM(qfs.unique_urls) AS total_urls_cited,
+    AVG(CASE WHEN qfs.unique_urls > 1 THEN qfs.mean_cosine_similarity END) AS avg_mibcs
+FROM session_url_details sud
+JOIN query_fanout_sessions qfs ON sud.session_id = qfs.session_id AND sud.domain = qfs.domain
+JOIN sitemap_urls sm ON sud.url = sm.url_path AND sud.domain = sm.domain
+WHERE sm.lastmod_month IS NOT NULL
+GROUP BY 1, 2, 3, 4, 5, 6, 7, 8
+"""
+
+VIEW_URL_PERFORMANCE_WITH_FRESHNESS = """
+CREATE VIEW IF NOT EXISTS v_url_performance_with_freshness AS
+SELECT
+    up.request_date,
+    up.domain,
+    up.url_path,
+    'https://' || up.request_host || up.url_path AS full_url,
+    up.training_hits,
+    up.user_request_hits,
+    up.total_bot_requests,
+    up.unique_bot_providers,
+    up.unique_bot_names,
+    up.first_seen,
+    up.last_seen,
+    sm.lastmod_month,
+    sm.lastmod,
+    sm.sitemap_source,
+    CASE
+        WHEN sm.lastmod_month IS NOT NULL
+        THEN (CAST(strftime('%Y', up.request_date) AS INTEGER)
+              - CAST(strftime('%Y', sm.lastmod_month || '-01') AS INTEGER)) * 12
+             + (CAST(strftime('%m', up.request_date) AS INTEGER)
+                - CAST(strftime('%m', sm.lastmod_month || '-01') AS INTEGER))
+        ELSE NULL
+    END AS months_since_lastmod
+FROM url_performance up
+LEFT JOIN sitemap_urls sm ON up.url_path = sm.url_path AND up.domain = sm.domain
+"""
+
 # View names for drop-before-recreate during schema changes
 VIEW_NAMES = [
     "v_session_url_distribution",
@@ -483,6 +653,11 @@ VIEW_NAMES = [
     "v_url_freshness",
     "v_decay_unique_urls",
     "v_decay_request_volume",
+    "v_decay_unique_urls_by_domain",
+    "v_decay_request_volume_by_domain",
+    "v_url_freshness_detail",
+    "v_sessions_by_content_age",
+    "v_url_performance_with_freshness",
 ]
 
 # List of all view definitions for easy iteration (order matches VIEW_NAMES)
@@ -497,6 +672,11 @@ VIEW_DEFINITIONS = [
     VIEW_URL_FRESHNESS,
     VIEW_DECAY_UNIQUE_URLS,
     VIEW_DECAY_REQUEST_VOLUME,
+    VIEW_DECAY_UNIQUE_URLS_BY_DOMAIN,
+    VIEW_DECAY_REQUEST_VOLUME_BY_DOMAIN,
+    VIEW_URL_FRESHNESS_DETAIL,
+    VIEW_SESSIONS_BY_CONTENT_AGE,
+    VIEW_URL_PERFORMANCE_WITH_FRESHNESS,
 ]
 
 # =============================================================================
@@ -535,12 +715,17 @@ INDEX_DEFINITIONS = [
     "CREATE INDEX IF NOT EXISTS idx_session_url_details_session ON session_url_details(session_id)",
     "CREATE INDEX IF NOT EXISTS idx_session_url_details_bot ON session_url_details(bot_name)",
     "CREATE INDEX IF NOT EXISTS idx_session_url_details_unique_urls ON session_url_details(session_unique_urls)",
-    # Sitemap URLs indexes
+    # Session URL details — domain index (needed for decay view JOINs)
+    "CREATE INDEX IF NOT EXISTS idx_session_url_details_domain ON session_url_details(domain)",
+    # URL performance — composite unique key prevents duplicate re-aggregation rows
+    "CREATE UNIQUE INDEX IF NOT EXISTS idx_url_performance_natural_key ON url_performance(domain, request_date, url_path)",
+    # Sitemap tables — domain as first clustering key for multi-domain JOINs
     "CREATE INDEX IF NOT EXISTS idx_sitemap_urls_url_path ON sitemap_urls(url_path)",
-    # Sitemap freshness indexes
+    "CREATE INDEX IF NOT EXISTS idx_sitemap_urls_domain ON sitemap_urls(domain)",
     "CREATE INDEX IF NOT EXISTS idx_sitemap_freshness_url_path ON sitemap_freshness(url_path)",
+    "CREATE INDEX IF NOT EXISTS idx_sitemap_freshness_domain ON sitemap_freshness(domain)",
     "CREATE INDEX IF NOT EXISTS idx_sitemap_freshness_lastmod_month ON sitemap_freshness(lastmod_month)",
-    # URL volume decay indexes
+    "CREATE INDEX IF NOT EXISTS idx_url_volume_decay_domain ON url_volume_decay(domain)",
     "CREATE INDEX IF NOT EXISTS idx_url_volume_decay_url_path ON url_volume_decay(url_path)",
     "CREATE INDEX IF NOT EXISTS idx_url_volume_decay_period ON url_volume_decay(period, period_start)",
 ]

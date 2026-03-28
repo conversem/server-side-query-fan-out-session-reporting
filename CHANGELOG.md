@@ -5,6 +5,84 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.2] - 2026-03-26
+
+### Added
+
+- **`domain` column in sitemap tables** — `sitemap_urls`, `sitemap_freshness`, and `url_volume_decay`
+  now include a `domain TEXT` column. `UNIQUE` constraints updated to `(domain, url_path)`, enabling
+  correct multi-domain reporting when multiple websites share the same URL paths.
+- **5 new analytical views** — `v_decay_unique_urls_by_domain`, `v_decay_request_volume_by_domain`,
+  `v_url_freshness_detail`, `v_sessions_by_content_age`, `v_url_performance_with_freshness`.
+  Total view count: 15. See `docs_public/dashboard-guide.md` for usage.
+- **`full_url` column in URL views** — `v_url_cooccurrence` and all new URL-exposing views now
+  include `CONCAT('https://', domain, url_path) AS full_url` for clickable, unambiguous URLs in
+  Looker Studio or any BI tool.
+- **`domain` dimension in all 10 existing dashboard views** — all views updated to include `domain`
+  in SELECT and GROUP BY, enabling per-domain filtering and rollup without code changes.
+- **`idx_url_performance_natural_key`** — composite UNIQUE index on `url_performance(domain,
+  request_date, url_path)` to prevent duplicate rows from re-aggregation runs.
+- **Migration scripts** — `scripts/migrations/migrate_add_domain_to_sitemap_tables.py` and
+  `scripts/migrations/migrate_fix_url_performance_unique_key.py`; both idempotent and
+  dry-run capable. See `docs_public/migration-v2.1.1-to-v2.1.2.md`.
+- **Dashboard guide** — `docs_public/dashboard-guide.md`: complete reference for building
+  Looker Studio dashboards, including which views to use, `full_url` as clickable link,
+  domain filter setup, decay curve caveats, and suggested page structure.
+
+### Fixed
+
+- **Sitemap JOIN cross-contamination** — `aggregate_freshness()`, `aggregate_volume_decay()`,
+  and all decay views previously joined `sitemap_urls` to session data on `url_path` only.
+  In multi-domain setups this caused sessions from domain A to match sitemap entries from
+  domain B. All JOINs now include `AND sud.domain = sm.domain`.
+- **`_compute_decay_rates()` self-join** — the decay rate self-join previously matched rows
+  on `url_path + period` only, producing wrong `prev_request_count` when two domains share
+  a URL path. Fixed to include `AND cur.domain = prev.domain`.
+- **`v_daily_kpis` unique_urls_requested** — the subquery/CTE for unique URLs was domain-blind,
+  returning the all-domain count on every per-domain row. Rewritten as a domain-scoped CTE
+  with a `LEFT JOIN` on `(session_date, domain)`.
+
+### Changed
+
+- **`sitemap_source` backfill in `sitemap_freshness`** — this table already had `sitemap_source`
+  and is now also included in the domain backfill migration, alongside `sitemap_urls`.
+  `url_volume_decay` (no `sitemap_source`) is repopulated by re-running `SitemapAggregator`.
+
+## [2.1.2] - 2026-03-25
+
+### Added
+
+- **`domain` column on all sitemap tables** (`sitemap_urls`, `sitemap_freshness`,
+  `url_volume_decay`) — enables correct per-domain reporting in multi-domain setups.
+  UNIQUE constraints updated to be domain-scoped.
+- **5 new SQLite analytical views** — `v_sitemap_domain_coverage`,
+  `v_sitemap_freshness_by_domain`, `v_sitemap_url_age`, `v_decay_by_domain`,
+  `v_url_volume_trend`; total view count raised to 15.
+- **`full_url` column** exposed in `v_url_cooccurrence` and all views that reference
+  a URL path.
+- **Migration scripts** for upgrading existing databases:
+  - `scripts/migrations/migrate_add_domain_to_sitemap_tables.py` — adds `domain`
+    column and backfills from `sitemap_source`; supports glob patterns for
+    multi-database setups.
+  - `scripts/migrations/migrate_fix_url_performance_unique_key.py` — adds composite
+    UNIQUE index on `(domain, request_date, url_path)`.
+- **Dashboard guide** (`docs/dashboard-guide.md`) — documents all 15 SQLite views
+  with example queries.
+- **Unified migration index** (`docs/migration-all-versions.md`) — one place to find
+  all migration guides across all releases.
+
+### Fixed
+
+- Sitemap JOINs were domain-blind in multi-domain setups — all views and aggregations
+  now filter and group by `domain`.
+- `_compute_decay_rates()` self-join produced wrong decay rates across domains.
+- `v_daily_kpis.unique_urls_requested` was counting across all domains regardless of
+  domain filter.
+
+### Changed
+
+- All 10 existing dashboard views now include `domain` in `SELECT` and `GROUP BY`.
+
 ## [2.1.1] - 2026-03-13
 
 ### Changed
