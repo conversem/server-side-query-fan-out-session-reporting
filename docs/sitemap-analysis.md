@@ -7,14 +7,14 @@
 ## Multi-Domain Setup
 
 When running with multiple domains, the `domain` column distinguishes sitemap entries and sessions
-per website. All sitemap views (`v_url_freshness`, `v_url_freshness_detail`, `v_decay_*`) are
-scoped by domain, so filtering by `domain` in Looker Studio gives correct per-domain numbers.
+per website. Sitemap views are scoped by domain, so filtering by `domain` in Looker Studio gives
+correct per-domain numbers.
 
 New views for multi-domain analysis:
 - **`v_url_freshness_detail`** — per-URL freshness with `full_url` and `months_since_lastmod`. Filter by `url_path LIKE '/section%'` to analyze a content section.
 - **`v_sessions_by_content_age`** — sessions joined to sitemap age. Filter `months_since_lastmod >= 6` to see LLM activity on stale content.
 - **`v_url_performance_with_freshness`** — URL traffic with lastmod date. `WHERE lastmod IS NULL` finds pages cited by bots but absent from the sitemap.
-- **`v_decay_unique_urls_by_domain`** / **`v_decay_request_volume_by_domain`** — per-domain decay curves with correct per-domain denominators.
+- **`v_decay_request_volume`** — cumulative % of request volume for content modified within N months.
 
 ## Overview
 

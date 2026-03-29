@@ -126,8 +126,6 @@ class TestViewsFullUrl:
 
 
 class TestDecayViewsJoinFixed:
-    def test_v_decay_unique_urls_join_domain_scoped(self):
-        assert "sud.domain = sm.domain" in VIEW_DECAY_UNIQUE_URLS
 
     def test_v_decay_request_volume_join_domain_scoped(self):
         assert "sud.domain = sm.domain" in VIEW_DECAY_REQUEST_VOLUME
@@ -141,12 +139,7 @@ class TestNewViews:
     def test_view_names_has_15_entries(self):
         assert len(VIEW_NAMES) == 15
 
-    def test_v_decay_unique_urls_by_domain_has_domain_denominator(self):
-        assert "domain" in VIEW_DECAY_UNIQUE_URLS_BY_DOMAIN
-        assert "GROUP BY session_date, domain" in VIEW_DECAY_UNIQUE_URLS_BY_DOMAIN
 
-    def test_v_decay_request_volume_by_domain_has_domain_denominator(self):
-        assert "GROUP BY session_date, domain" in VIEW_DECAY_REQUEST_VOLUME_BY_DOMAIN
 
     def test_v_url_freshness_detail_has_full_url(self):
         assert "full_url" in VIEW_URL_FRESHNESS_DETAIL

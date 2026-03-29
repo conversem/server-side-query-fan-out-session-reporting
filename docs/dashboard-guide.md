@@ -110,35 +110,26 @@ itself is domain-agnostic.
 
 **Purpose:** How content age and sitemap freshness correlate with LLM crawl activity.
 
-**Data source:** `v_url_freshness`, `v_url_freshness_detail`, `v_decay_unique_urls_by_domain`,
-`v_decay_request_volume_by_domain`, `v_sessions_by_content_age`, `v_url_performance_with_freshness`
+**Data source:** `v_url_freshness`, `v_url_freshness_detail`, `v_decay_request_volume`,
+`v_sessions_by_content_age`, `v_url_performance_with_freshness`
 
 **Suggested charts:**
 - Table: `v_url_freshness_detail` — `full_url`, `domain`, `lastmod`, `months_since_lastmod`,
   `request_count`. Sort by `request_count DESC` to see freshest/most-crawled pages.
   Add `WHERE lastmod IS NULL` filter to find un-sitemapped but bot-crawled pages.
-- Line chart: `v_decay_unique_urls_by_domain` — `cumulative_pct` over `months_since_lastmod`,
-  broken down by `domain`. Shows the decay curve of unique URLs per domain.
-- Line chart: `v_decay_request_volume_by_domain` — same but for request volume.
+- Line chart: `v_decay_request_volume` — `cumulative_pct` over `months_bucket`. Shows what
+  percentage of total request volume targets content modified within the last N months.
 - Scatter / bar: `v_sessions_by_content_age` — `months_since_lastmod` buckets vs session count.
   Filter `months_since_lastmod >= 6` to focus on stale content.
 - Table: `v_url_performance_with_freshness` — `full_url`, `domain`, `request_count`,
   `lastmod`, `months_since_lastmod`. Filter `lastmod IS NULL` to find pages cited by bots
   but absent from the sitemap.
 
-#### Critical caveat: decay curve denominators
+#### Decay curve note
 
-`v_decay_unique_urls_by_domain` and `v_decay_request_volume_by_domain` use a **per-domain
-denominator**: `cumulative_pct` is the percentage of *that domain's* total unique URLs (or
-request volume) that falls within the given age bucket.
-
-**Do not** mix rows from different domains in a single cumulative-percentage calculation. Use
-`domain` as a breakdown dimension (not a filter that excludes domains) so each domain's curve
-is drawn independently.
-
-The older global decay views (`v_url_decay_by_age_bucket`, `v_url_request_volume_by_age_bucket`)
-use a single denominator across all domains. In single-domain deployments they are equivalent.
-In multi-domain deployments, prefer the `_by_domain` variants.
+`v_decay_request_volume` uses a global denominator across all domains. In multi-domain
+deployments, filter by `domain` and interpret `cumulative_pct` as the percentage of
+requests for content modified within the given age bucket across the full dataset.
 
 ---
 
@@ -188,10 +179,7 @@ Looker Studio, add a **Required filter** to prevent unbounded queries.
 | Per-URL freshness with age | `v_url_freshness_detail` | `full_url`, `domain`, `lastmod`, `months_since_lastmod` |
 | Sessions on stale content | `v_sessions_by_content_age` | `months_since_lastmod`, `session_count` |
 | URL traffic vs sitemap | `v_url_performance_with_freshness` | `full_url`, `request_count`, `lastmod` |
-| Domain decay (unique URLs) | `v_decay_unique_urls_by_domain` | `domain`, `months_since_lastmod`, `cumulative_pct` |
-| Domain decay (volume) | `v_decay_request_volume_by_domain` | `domain`, `months_since_lastmod`, `cumulative_pct` |
-| Global decay (unique URLs) | `v_url_decay_by_age_bucket` | `months_since_lastmod`, `cumulative_pct` |
-| Global decay (volume) | `v_url_request_volume_by_age_bucket` | `months_since_lastmod`, `cumulative_pct` |
+| Request volume decay | `v_decay_request_volume` | `months_bucket`, `cumulative_pct` |
 
 ---
 
@@ -204,7 +192,7 @@ Looker Studio, add a **Required filter** to prevent unbounded queries.
 | `url_path` | Sitemap and URL views | Path component only, e.g. `/over-ons/` |
 | `url` | `session_url_details` | Raw URL from request logs — may include query strings |
 | `fanout_session_name` | Session views | Semantic topic name assigned to the session |
-| `cumulative_pct` | Decay views | Percentage of total (domain-scoped in `_by_domain` views) within this age bucket |
+| `cumulative_pct` | `v_decay_request_volume` | Cumulative percentage of request volume for content modified within N months |
 | `months_since_lastmod` | Freshness views | Months since the page's `<lastmod>` in the sitemap |
 | `request_count` | `url_performance`, freshness/decay views | Raw bot request count for this URL |
 | `mean_mibcs_multi_url` | `v_daily_kpis` | Mean inter-bundle cosine similarity, scoped to multi-URL sessions |
@@ -230,16 +218,11 @@ in Looker Studio's resource settings.
 
 ## 7. Decay Curve Caveats
 
-### Global vs per-domain
+### Decay view
 
-The original decay views (`v_url_decay_by_age_bucket`, `v_url_request_volume_by_age_bucket`)
-compute `cumulative_pct` against a single global denominator that spans all domains. In a
-single-domain setup, these are equivalent to the per-domain views. In a multi-domain setup:
-
-- Using these views with a `domain` filter gives incorrect percentages — the denominator
-  still includes all domains.
-- Use `v_decay_unique_urls_by_domain` and `v_decay_request_volume_by_domain` instead when
-  comparing decay curves per domain.
+`v_decay_request_volume` computes `cumulative_pct` against a single global denominator that
+spans all domains. In a multi-domain setup, also filter by `domain` when comparing decay
+curves to ensure meaningful comparisons within each domain.
 
 ### What "cumulative_pct" means
 
