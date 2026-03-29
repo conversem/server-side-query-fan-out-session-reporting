@@ -89,7 +89,6 @@ Views:
 ├── v_category_comparison    User questions vs training data
 ├── v_url_cooccurrence       URL co-occurrence in multi-URL sessions
 ├── v_url_freshness          URL freshness status
-├── v_decay_unique_urls      Unique URLs over decay periods
 └── v_decay_request_volume   Request volume over decay periods
 ```
 

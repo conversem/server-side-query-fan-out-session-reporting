@@ -419,41 +419,6 @@ FROM request_counts rc
 JOIN sitemap_totals st ON rc.lastmod_month = st.lastmod_month AND rc.domain = st.domain
 """
 
-VIEW_DECAY_UNIQUE_URLS = """
-CREATE VIEW IF NOT EXISTS v_decay_unique_urls AS
-WITH RECURSIVE months_gen(n) AS (
-    SELECT 1 UNION ALL SELECT n + 1 FROM months_gen WHERE n < 36
-),
-url_ages AS (
-    SELECT DISTINCT
-        sud.session_date,
-        sud.url,
-        (CAST(strftime('%Y', sud.session_date) AS INTEGER)
-         - CAST(strftime('%Y', sm.lastmod_month || '-01') AS INTEGER)) * 12
-        + (CAST(strftime('%m', sud.session_date) AS INTEGER)
-         - CAST(strftime('%m', sm.lastmod_month || '-01') AS INTEGER))
-        AS months_ago
-    FROM session_url_details sud
-    JOIN sitemap_urls sm ON sud.url = sm.url_path AND sud.domain = sm.domain
-    WHERE sm.lastmod_month IS NOT NULL
-),
-daily_totals AS (
-    SELECT session_date, COUNT(*) AS total_urls
-    FROM url_ages
-    GROUP BY session_date
-)
-SELECT
-    ua.session_date,
-    mg.n AS months_bucket,
-    ROUND(
-        100.0 * SUM(CASE WHEN ua.months_ago <= mg.n THEN 1 ELSE 0 END)
-        / dt.total_urls, 1
-    ) AS cumulative_pct
-FROM url_ages ua
-CROSS JOIN months_gen mg
-JOIN daily_totals dt ON ua.session_date = dt.session_date
-GROUP BY ua.session_date, mg.n
-"""
 
 VIEW_DECAY_REQUEST_VOLUME = """
 CREATE VIEW IF NOT EXISTS v_decay_request_volume AS
@@ -490,80 +455,7 @@ JOIN daily_totals dt ON ra.session_date = dt.session_date
 GROUP BY ra.session_date, mg.n
 """
 
-VIEW_DECAY_UNIQUE_URLS_BY_DOMAIN = """
-CREATE VIEW IF NOT EXISTS v_decay_unique_urls_by_domain AS
-WITH RECURSIVE months_gen(n) AS (
-    SELECT 1 UNION ALL SELECT n + 1 FROM months_gen WHERE n < 36
-),
-url_ages AS (
-    SELECT DISTINCT
-        sud.session_date,
-        sud.domain,
-        sud.url,
-        (CAST(strftime('%Y', sud.session_date) AS INTEGER)
-         - CAST(strftime('%Y', sm.lastmod_month || '-01') AS INTEGER)) * 12
-        + (CAST(strftime('%m', sud.session_date) AS INTEGER)
-         - CAST(strftime('%m', sm.lastmod_month || '-01') AS INTEGER))
-        AS months_ago
-    FROM session_url_details sud
-    JOIN sitemap_urls sm ON sud.url = sm.url_path AND sud.domain = sm.domain
-    WHERE sm.lastmod_month IS NOT NULL
-),
-daily_totals AS (
-    SELECT session_date, domain, COUNT(*) AS total_urls
-    FROM url_ages
-    GROUP BY session_date, domain
-)
-SELECT
-    ua.session_date,
-    ua.domain,
-    mg.n AS months_bucket,
-    ROUND(
-        100.0 * SUM(CASE WHEN ua.months_ago <= mg.n THEN 1 ELSE 0 END)
-        / dt.total_urls, 1
-    ) AS cumulative_pct
-FROM url_ages ua
-CROSS JOIN months_gen mg
-JOIN daily_totals dt ON ua.session_date = dt.session_date AND ua.domain = dt.domain
-GROUP BY ua.session_date, ua.domain, mg.n
-"""
 
-VIEW_DECAY_REQUEST_VOLUME_BY_DOMAIN = """
-CREATE VIEW IF NOT EXISTS v_decay_request_volume_by_domain AS
-WITH RECURSIVE months_gen(n) AS (
-    SELECT 1 UNION ALL SELECT n + 1 FROM months_gen WHERE n < 36
-),
-request_ages AS (
-    SELECT
-        sud.session_date,
-        sud.domain,
-        (CAST(strftime('%Y', sud.session_date) AS INTEGER)
-         - CAST(strftime('%Y', sm.lastmod_month || '-01') AS INTEGER)) * 12
-        + (CAST(strftime('%m', sud.session_date) AS INTEGER)
-         - CAST(strftime('%m', sm.lastmod_month || '-01') AS INTEGER))
-        AS months_ago
-    FROM session_url_details sud
-    JOIN sitemap_urls sm ON sud.url = sm.url_path AND sud.domain = sm.domain
-    WHERE sm.lastmod_month IS NOT NULL
-),
-daily_totals AS (
-    SELECT session_date, domain, COUNT(*) AS total_requests
-    FROM request_ages
-    GROUP BY session_date, domain
-)
-SELECT
-    ra.session_date,
-    ra.domain,
-    mg.n AS months_bucket,
-    ROUND(
-        100.0 * SUM(CASE WHEN ra.months_ago <= mg.n THEN 1 ELSE 0 END)
-        / dt.total_requests, 1
-    ) AS cumulative_pct
-FROM request_ages ra
-CROSS JOIN months_gen mg
-JOIN daily_totals dt ON ra.session_date = dt.session_date AND ra.domain = dt.domain
-GROUP BY ra.session_date, ra.domain, mg.n
-"""
 
 VIEW_URL_FRESHNESS_DETAIL = """
 CREATE VIEW IF NOT EXISTS v_url_freshness_detail AS
@@ -651,10 +543,7 @@ VIEW_NAMES = [
     "v_category_comparison",
     "v_url_cooccurrence",
     "v_url_freshness",
-    "v_decay_unique_urls",
     "v_decay_request_volume",
-    "v_decay_unique_urls_by_domain",
-    "v_decay_request_volume_by_domain",
     "v_url_freshness_detail",
     "v_sessions_by_content_age",
     "v_url_performance_with_freshness",
@@ -670,10 +559,7 @@ VIEW_DEFINITIONS = [
     VIEW_CATEGORY_COMPARISON,
     VIEW_URL_COOCCURRENCE,
     VIEW_URL_FRESHNESS,
-    VIEW_DECAY_UNIQUE_URLS,
     VIEW_DECAY_REQUEST_VOLUME,
-    VIEW_DECAY_UNIQUE_URLS_BY_DOMAIN,
-    VIEW_DECAY_REQUEST_VOLUME_BY_DOMAIN,
     VIEW_URL_FRESHNESS_DETAIL,
     VIEW_SESSIONS_BY_CONTENT_AGE,
     VIEW_URL_PERFORMANCE_WITH_FRESHNESS,
