@@ -477,9 +477,23 @@ class BigQueryBackend(StorageBackend):
         return len(records)
 
     def insert_sitemap_urls(self, entries: list[dict]) -> int:
-        """Insert sitemap URL entries via load job."""
+        """Insert sitemap URL entries, replacing all existing rows for each domain.
+
+        Performs a domain-scoped DELETE before the bulk insert to prevent
+        duplicate accumulation across ingestion runs (truncate-then-reload
+        per domain). This ensures sitemap_urls has at most one row per
+        (domain, url_path) after each run.
+        """
         if not entries:
             return 0
+
+        domains = list({e.get("domain") for e in entries if e.get("domain")})
+        if domains:
+            table_id = self._get_full_table_id("sitemap_urls")
+            domain_list = ", ".join(f"'{d}'" for d in domains)
+            delete_sql = f"DELETE FROM `{table_id}` WHERE domain IN ({domain_list})"
+            self._client.query(delete_sql).result()
+
         now = datetime.now(timezone.utc).isoformat()
         rows = [
             {

@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.3] - 2026-04-01
+
+### Fixed
+
+- **Duplicate sitemap rows inflating freshness/decay views** — repeated sitemap ingestion runs
+  accumulated duplicate entries in `sitemap_urls`, causing all freshness and decay views to
+  overcount URLs and request volume by 13–16×. Fixed in two places:
+  - `v_url_freshness`, `v_url_freshness_detail`, `v_sessions_by_content_age`, and
+    `v_url_performance_with_freshness` now open with a `WITH dedup_sitemap AS (SELECT DISTINCT ...)`
+    CTE so duplicate rows in the table do not affect view output.
+  - BigQuery `insert_sitemap_urls()` now performs a domain-scoped `DELETE` before each bulk insert
+    (truncate-then-reload per domain), preventing future accumulation.
+
+### Added
+
+- **`migrate_dedup_sitemap_urls.py`** — one-time BigQuery migration to collapse existing duplicate
+  rows in `sitemap_urls` down to one row per `(domain, url_path)`, keeping the most recent
+  `_fetched_at`. Includes dry-run mode, row count verification, and a backup table for rollback.
+  Run this if you used the sitemap pipeline before v2.1.3.
+
+---
+
 ## [2.1.2] - 2026-03-26
 
 ### Added

@@ -14,6 +14,7 @@ If you are running an older version and want to reach the latest, run the migrat
 | v2.0.0 | v2.1.1 | `migrate_remove_bot_management_columns.py` (optional cleanup) | — |
 | v2.1.0 | v2.1.1 | `migrate_remove_bot_management_columns.py` (optional cleanup) | — |
 | v2.1.1 | v2.1.2 | `migrate_add_domain_to_sitemap_tables.py` + `migrate_fix_url_performance_unique_key.py` | [migration-v2.1.1-to-v2.1.2.md](migration-v2.1.1-to-v2.1.2.md) |
+| v2.1.2 | v2.1.3 | `migrate_dedup_sitemap_urls.py` (BigQuery users only — SQLite is self-healing via views) | — |
 
 > **Note on v2.1.1 bot management removal:** The pipeline stops writing
 > `bot_score`, `is_verified_bot`, and `avg_bot_score` after upgrading to
@@ -66,6 +67,21 @@ python scripts/migrations/migrate_fix_url_performance_unique_key.py --db-path da
 ```
 
 Then follow Steps 3–6 in [migration-v2.1.1-to-v2.1.2.md](migration-v2.1.1-to-v2.1.2.md).
+
+### Starting at v2.1.2 → latest (BigQuery users only)
+
+SQLite users: no action needed — views now use `SELECT DISTINCT` CTEs and are self-healing.
+
+BigQuery users: run the one-time dedup migration to collapse existing duplicate rows:
+
+```bash
+python scripts/migrations/migrate_dedup_sitemap_urls.py \
+    --project your-gcp-project --dataset bot_logs --dry-run
+
+# If dry-run looks correct:
+python scripts/migrations/migrate_dedup_sitemap_urls.py \
+    --project your-gcp-project --dataset bot_logs
+```
 
 ---
 

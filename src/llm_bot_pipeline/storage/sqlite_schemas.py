@@ -389,7 +389,15 @@ WHERE session_unique_urls > 1
 
 VIEW_URL_FRESHNESS = """
 CREATE VIEW IF NOT EXISTS v_url_freshness AS
-WITH request_counts AS (
+WITH dedup_sitemap AS (
+    SELECT DISTINCT
+        domain,
+        url_path,
+        lastmod_month
+    FROM sitemap_urls
+    WHERE lastmod_month IS NOT NULL
+),
+request_counts AS (
     SELECT
         sud.session_date,
         sud.domain,
@@ -397,14 +405,12 @@ WITH request_counts AS (
         COUNT(*) AS request_count,
         COUNT(DISTINCT sud.url) AS unique_urls_requested
     FROM session_url_details sud
-    JOIN sitemap_urls sm ON sud.url = sm.url_path AND sud.domain = sm.domain
-    WHERE sm.lastmod_month IS NOT NULL
+    JOIN dedup_sitemap sm ON sud.url = sm.url_path AND sud.domain = sm.domain
     GROUP BY sud.session_date, sud.domain, sm.lastmod_month
 ),
 sitemap_totals AS (
     SELECT domain, lastmod_month, COUNT(*) AS total_sitemap_urls
-    FROM sitemap_urls
-    WHERE lastmod_month IS NOT NULL
+    FROM dedup_sitemap
     GROUP BY domain, lastmod_month
 )
 SELECT
@@ -459,6 +465,16 @@ GROUP BY ra.session_date, mg.n
 
 VIEW_URL_FRESHNESS_DETAIL = """
 CREATE VIEW IF NOT EXISTS v_url_freshness_detail AS
+WITH dedup_sitemap AS (
+    SELECT DISTINCT
+        domain,
+        url_path,
+        lastmod_month,
+        lastmod,
+        sitemap_source
+    FROM sitemap_urls
+    WHERE lastmod_month IS NOT NULL
+)
 SELECT
     sud.session_date,
     sud.domain,
@@ -474,13 +490,22 @@ SELECT
     AS months_since_lastmod,
     COUNT(*) AS request_count
 FROM session_url_details sud
-JOIN sitemap_urls sm ON sud.url = sm.url_path AND sud.domain = sm.domain
-WHERE sm.lastmod_month IS NOT NULL
+JOIN dedup_sitemap sm ON sud.url = sm.url_path AND sud.domain = sm.domain
 GROUP BY 1, 2, 3, 4, 5, 6, 7, 8
 """
 
 VIEW_SESSIONS_BY_CONTENT_AGE = """
 CREATE VIEW IF NOT EXISTS v_sessions_by_content_age AS
+WITH dedup_sitemap AS (
+    SELECT DISTINCT
+        domain,
+        url_path,
+        lastmod_month,
+        lastmod,
+        sitemap_source
+    FROM sitemap_urls
+    WHERE lastmod_month IS NOT NULL
+)
 SELECT
     qfs.session_date,
     qfs.domain,
@@ -499,13 +524,16 @@ SELECT
     AVG(CASE WHEN qfs.unique_urls > 1 THEN qfs.mean_cosine_similarity END) AS avg_mibcs
 FROM session_url_details sud
 JOIN query_fanout_sessions qfs ON sud.session_id = qfs.session_id AND sud.domain = qfs.domain
-JOIN sitemap_urls sm ON sud.url = sm.url_path AND sud.domain = sm.domain
-WHERE sm.lastmod_month IS NOT NULL
+JOIN dedup_sitemap sm ON sud.url = sm.url_path AND sud.domain = sm.domain
 GROUP BY 1, 2, 3, 4, 5, 6, 7, 8
 """
 
 VIEW_URL_PERFORMANCE_WITH_FRESHNESS = """
 CREATE VIEW IF NOT EXISTS v_url_performance_with_freshness AS
+WITH dedup_sitemap AS (
+    SELECT DISTINCT domain, url_path, lastmod_month, lastmod, sitemap_source
+    FROM sitemap_urls
+)
 SELECT
     up.request_date,
     up.domain,
@@ -525,12 +553,12 @@ SELECT
         WHEN sm.lastmod_month IS NOT NULL
         THEN (CAST(strftime('%Y', up.request_date) AS INTEGER)
               - CAST(strftime('%Y', sm.lastmod_month || '-01') AS INTEGER)) * 12
-             + (CAST(strftime('%m', up.request_date) AS INTEGER)
-                - CAST(strftime('%m', sm.lastmod_month || '-01') AS INTEGER))
+           + (CAST(strftime('%m', up.request_date) AS INTEGER)
+              - CAST(strftime('%m', sm.lastmod_month || '-01') AS INTEGER))
         ELSE NULL
     END AS months_since_lastmod
 FROM url_performance up
-LEFT JOIN sitemap_urls sm ON up.url_path = sm.url_path AND up.domain = sm.domain
+LEFT JOIN dedup_sitemap sm ON up.url_path = sm.url_path AND up.domain = sm.domain
 """
 
 # View names for drop-before-recreate during schema changes
