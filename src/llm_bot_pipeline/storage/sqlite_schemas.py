@@ -462,7 +462,6 @@ GROUP BY ra.session_date, mg.n
 """
 
 
-
 VIEW_URL_FRESHNESS_DETAIL = """
 CREATE VIEW IF NOT EXISTS v_url_freshness_detail AS
 WITH dedup_sitemap AS (

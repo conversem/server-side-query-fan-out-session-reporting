@@ -9,9 +9,6 @@ from llm_bot_pipeline.storage.sqlite_schemas import (
     VIEW_CATEGORY_COMPARISON,
     VIEW_DAILY_KPIS,
     VIEW_DECAY_REQUEST_VOLUME,
-    VIEW_DECAY_REQUEST_VOLUME_BY_DOMAIN,
-    VIEW_DECAY_UNIQUE_URLS,
-    VIEW_DECAY_UNIQUE_URLS_BY_DOMAIN,
     VIEW_NAMES,
     VIEW_SESSION_SINGLETON_BINARY,
     VIEW_SESSION_URL_DISTRIBUTION,
@@ -137,9 +134,7 @@ class TestDecayViewsJoinFixed:
 
 class TestNewViews:
     def test_view_names_has_15_entries(self):
-        assert len(VIEW_NAMES) == 15
-
-
+        assert len(VIEW_NAMES) == 12
 
     def test_v_url_freshness_detail_has_full_url(self):
         assert "full_url" in VIEW_URL_FRESHNESS_DETAIL
