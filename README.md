@@ -1,3 +1,5 @@
+
+
 # Server-Side Query Fan-Out Session monitoring & Reporting
 
 [![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](LICENSE)
@@ -122,6 +124,7 @@ source venv/bin/activate  # Linux/Mac
 pip install .
 # For session refinement (ML): pip install ".[ml]"
 # For research visualizations: pip install ".[viz]"
+# For GCP pipeline modes: pip install ".[gcp]"
 ```
 
 ### 2. Configure Secrets (Required)
