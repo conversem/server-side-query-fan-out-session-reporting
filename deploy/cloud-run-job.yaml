@@ -1,0 +1,53 @@
+# Cloud Run Job Configuration for LLM Bot Traffic Pipeline
+#
+# Deploy with:
+#   gcloud run jobs replace deploy/cloud-run-job.yaml \
+#     --project=PROJECT_ID --region=REGION
+#
+# Or use scripts/deploy-cloud-run.sh for the full workflow.
+#
+# Schedule with Cloud Scheduler:
+#   scripts/setup_cloud_scheduler.sh
+
+apiVersion: run.googleapis.com/v1
+kind: Job
+metadata:
+  name: llm-bot-pipeline
+  labels:
+    app: llm-bot-pipeline
+spec:
+  template:
+    metadata:
+      labels:
+        app: llm-bot-pipeline
+    spec:
+      template:
+        spec:
+          containers:
+            - name: llm-bot-pipeline
+              image: europe-west1-docker.pkg.dev/PROJECT_ID_PLACEHOLDER/llm-bot-pipeline/llm-bot-pipeline:latest
+              command:
+                - python
+                - scripts/run_daily_etl.py
+              env:
+                - name: PROCESSING_MODE
+                  value: "gcp_bq"
+                - name: GCP_PROJECT_ID
+                  value: "PROJECT_ID_PLACEHOLDER"
+                - name: GCP_LOCATION
+                  value: "EU"
+                - name: STORAGE_BACKEND
+                  value: "bigquery"
+                - name: USE_SECRET_MANAGER
+                  value: "true"
+                - name: CONFIG_SECRET
+                  value: "pipeline-config"
+                - name: PYTHONUNBUFFERED
+                  value: "1"
+              resources:
+                limits:
+                  memory: "4Gi"
+                  cpu: "1"
+          maxRetries: 0
+          serviceAccountName: "SA_ID_PLACEHOLDER@PROJECT_ID_PLACEHOLDER.iam.gserviceaccount.com"
+          timeoutSeconds: 43200

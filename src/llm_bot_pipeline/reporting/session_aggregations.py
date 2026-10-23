@@ -10,9 +10,7 @@ Flow: raw data -> TemporalBundler.bundle_by_time()
       -> optional semantic refinement -> SessionStorageWriter.insert_sessions()
 """
 
-import json
 import logging
-from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -21,85 +19,18 @@ import pandas as pd
 
 from ..config.settings import SessionRefinementSettings
 from ..research.fingerprint_analysis import FingerprintAnalyzer
-from ..research.semantic_embeddings import URLEmbedder, get_confidence_level
+from ..research.semantic_embeddings import URLEmbedder
 from ..research.session_refinement import SessionRefiner as SemanticRefiner
 from ..research.temporal_analysis import Bundle, EnrichedBundle
 from ..storage import StorageBackend, get_backend
-from ..utils.url_utils import derive_session_name
+from .refinement_audit_logger import RefinementAuditLogger
+from .session_models import RefinementMetrics, SessionAggregationResult, SessionRecord
+from .session_record_factory import SessionRecordFactory
 from .session_storage_writer import SessionStorageWriter
+from .session_url_details import SessionUrlDetailsPopulator
 from .temporal_bundler import TemporalBundler
 
 logger = logging.getLogger(__name__)
-
-
-@dataclass
-class SessionRecord:
-    """A query fan-out session record for storage."""
-
-    session_id: str
-    session_date: str
-    session_start_time: str
-    session_end_time: str
-    duration_ms: float
-    bot_provider: str
-    bot_name: Optional[str]
-    request_count: int
-    unique_urls: int
-    mean_cosine_similarity: Optional[float]
-    min_cosine_similarity: Optional[float]
-    max_cosine_similarity: Optional[float]
-    confidence_level: str
-    fanout_session_name: Optional[str]  # Human-readable topic from first URL
-    url_list: str  # JSON array
-    window_ms: float
-    domain: Optional[str] = None
-    splitting_strategy: Optional[str] = None  # 'mibcs_only', 'network_only', etc.
-    _created_at: str = ""
-    parent_session_id: Optional[str] = None
-    was_refined: bool = False
-    refinement_reason: Optional[str] = None
-    pre_refinement_mibcs: Optional[float] = None
-
-
-@dataclass
-class RefinementMetrics:
-    """Metrics from session refinement stage."""
-
-    enabled: bool = False
-    bundles_analyzed: int = 0
-    collision_candidates: int = 0
-    bundles_split: int = 0
-    sub_bundles_created: int = 0
-    mean_mibcs_improvement: float = 0.0
-
-    def to_dict(self) -> dict:
-        """Convert to dictionary for serialization."""
-        return {
-            "enabled": self.enabled,
-            "bundles_analyzed": self.bundles_analyzed,
-            "collision_candidates": self.collision_candidates,
-            "bundles_split": self.bundles_split,
-            "sub_bundles_created": self.sub_bundles_created,
-            "mean_mibcs_improvement": self.mean_mibcs_improvement,
-        }
-
-
-@dataclass
-class SessionAggregationResult:
-    """Result of session aggregation operation."""
-
-    success: bool
-    sessions_created: int
-    total_requests_bundled: int
-    window_ms: float
-    mean_session_size: float
-    high_confidence_count: int
-    medium_confidence_count: int
-    low_confidence_count: int
-    error: Optional[str] = None
-    duration_seconds: float = 0.0
-    # Refinement metrics (optional)
-    refinement: RefinementMetrics = field(default_factory=RefinementMetrics)
 
 
 class SessionAggregator:
@@ -149,6 +80,12 @@ class SessionAggregator:
 
         # Composed components (orchestrator delegates to these)
         self._storage_writer = SessionStorageWriter(self._backend)
+        self._url_details = SessionUrlDetailsPopulator(self._backend, self.TABLE_NAME)
+        self._record_factory = SessionRecordFactory(self._embedder)
+        self._refinement_audit = RefinementAuditLogger(
+            self._backend,
+            self._refinement_settings,
+        )
 
         # Initialize semantic refiner lazily (only when refinement is enabled)
         self._refiner: Optional[SemanticRefiner] = None
@@ -259,6 +196,11 @@ class SessionAggregator:
                 if "bot_name" in bundle_df.columns and len(bundle_df) > 0
                 else None
             )
+            domain = (
+                bundle_df["domain"].iloc[0]
+                if "domain" in bundle_df.columns and len(bundle_df) > 0
+                else None
+            )
 
             enriched = EnrichedBundle.from_bundle(
                 bundle,
@@ -267,6 +209,7 @@ class SessionAggregator:
                 countries=countries,
                 bot_tags=bot_tags,
                 bot_name=bot_name,
+                domain=domain,
             )
             enriched_bundles.append(enriched)
 
@@ -566,111 +509,14 @@ class SessionAggregator:
         splitting_strategy: Optional[str] = None,
     ) -> list[SessionRecord]:
         """Convert Bundle objects to SessionRecord objects."""
-        records = []
-        now = datetime.now(timezone.utc).isoformat()
-        parent_mibcs_map = parent_mibcs_map or {}
-
-        for bundle in bundles:
-            # Compute similarity
-            if len(bundle.urls) >= 2:
-                sim_result = self._embedder.compute_similarity(bundle.urls)
-                mean_sim = sim_result.mean_similarity
-                min_sim = sim_result.min_similarity
-                max_sim = sim_result.max_similarity
-                confidence = get_confidence_level(mean_sim, min_sim)
-            else:
-                mean_sim = 1.0
-                min_sim = 1.0
-                max_sim = 1.0
-                confidence = "high"  # Single URL is perfectly coherent
-
-            # Get bot name - prefer from EnrichedBundle, fall back to DataFrame
-            # Note: For sub-bundles from refinement, request_indices are relative
-            # to the parent bundle, so we must use EnrichedBundle.bot_name
-            bot_name = None
-            if isinstance(bundle, EnrichedBundle) and bundle.bot_name:
-                bot_name = bundle.bot_name
-            elif (
-                bot_name_col
-                and bundle.request_indices
-                and "_split_" not in bundle.bundle_id
-            ):
-                # Only look up from DataFrame for original bundles (not sub-bundles)
-                try:
-                    first_idx = bundle.request_indices[0]
-                    if first_idx < len(df) and bot_name_col in df.columns:
-                        bot_name = df.iloc[first_idx][bot_name_col]
-                except (IndexError, KeyError):
-                    pass
-
-            # Derive domain from DataFrame (first request in bundle)
-            domain = None
-            if "domain" in df.columns and bundle.request_indices:
-                if "_split_" not in bundle.bundle_id:
-                    try:
-                        first_idx = bundle.request_indices[0]
-                        if first_idx < len(df):
-                            domain = df.iloc[first_idx]["domain"]
-                    except (IndexError, KeyError):
-                        pass
-                elif isinstance(bundle, EnrichedBundle):
-                    domain = getattr(bundle, "domain", None)
-
-            # Derive session name from first URL
-            session_name = None
-            if bundle.urls:
-                session_name = derive_session_name(bundle.urls[0])
-
-            # Deduplicate URLs while preserving order (first occurrence)
-            seen = set()
-            unique_url_list = []
-            for url in bundle.urls:
-                if url not in seen:
-                    seen.add(url)
-                    unique_url_list.append(url)
-
-            # Check if this is a sub-bundle from refinement
-            parent_session_id = None
-            was_refined = False
-            refinement_reason = None
-            pre_refinement_mibcs = None
-
-            if "_split_" in bundle.bundle_id:
-                # This is a sub-bundle - extract parent ID
-                parent_session_id = bundle.bundle_id.rsplit("_split_", 1)[0]
-                was_refined = True
-                refinement_reason = "semantic_split"
-                # Get parent's pre-refinement MIBCS
-                pre_refinement_mibcs = parent_mibcs_map.get(parent_session_id)
-
-            record = SessionRecord(
-                session_id=bundle.bundle_id,
-                session_date=bundle.start_time.date().isoformat(),
-                domain=domain,
-                session_start_time=bundle.start_time.isoformat(),
-                session_end_time=bundle.end_time.isoformat(),
-                duration_ms=bundle.duration_ms,
-                bot_provider=bundle.bot_provider,
-                bot_name=bot_name,
-                request_count=bundle.request_count,
-                unique_urls=len(unique_url_list),
-                mean_cosine_similarity=mean_sim,
-                min_cosine_similarity=min_sim,
-                max_cosine_similarity=max_sim,
-                confidence_level=confidence,
-                fanout_session_name=session_name,
-                url_list=json.dumps(unique_url_list),
-                window_ms=window_ms,
-                splitting_strategy=splitting_strategy,
-                _created_at=now,
-                parent_session_id=parent_session_id,
-                was_refined=was_refined,
-                refinement_reason=refinement_reason,
-                pre_refinement_mibcs=pre_refinement_mibcs,
-            )
-            records.append(record)
-
-        return records
+        return self._record_factory.bundles_to_records(
+            bundles=bundles,
+            window_ms=window_ms,
+            df=df,
+            bot_name_col=bot_name_col,
+            parent_mibcs_map=parent_mibcs_map,
+            splitting_strategy=splitting_strategy,
+        )
 
     def delete_sessions(
         self,
@@ -746,11 +592,7 @@ class SessionAggregator:
 
     def _get_refinement_log_table_ref(self) -> str:
         """Get fully qualified table reference for refinement log."""
-        table_name = "session_refinement_log"
-        full_id = self._backend.get_full_table_id(table_name)
-        if self._backend.backend_type == "bigquery":
-            return f"`{full_id}`"
-        return full_id
+        return self._refinement_audit._table_ref()
 
     def _log_refinement_run(
         self,
@@ -766,49 +608,7 @@ class SessionAggregator:
             window_ms: Window size used
             duration_ms: Duration of refinement in milliseconds
         """
-        if not metrics.enabled:
-            return
-
-        table_ref = self._get_refinement_log_table_ref()
-        sql = f"""
-            INSERT INTO {table_ref} (
-                run_timestamp, window_ms, total_bundles, collision_candidates,
-                bundles_split, sub_bundles_created, mean_mibcs_improvement,
-                refinement_duration_ms, collision_ip_threshold,
-                collision_homogeneity_threshold, similarity_threshold,
-                min_sub_bundle_size, min_mibcs_improvement
-            ) VALUES (
-                :run_timestamp, :window_ms, :total_bundles, :collision_candidates,
-                :bundles_split, :sub_bundles_created, :mean_mibcs_improvement,
-                :refinement_duration_ms, :collision_ip_threshold,
-                :collision_homogeneity_threshold, :similarity_threshold,
-                :min_sub_bundle_size, :min_mibcs_improvement
-            )
-        """
-
-        try:
-            self._backend.execute(
-                sql,
-                {
-                    "run_timestamp": datetime.now(timezone.utc),
-                    "window_ms": window_ms,
-                    "total_bundles": metrics.bundles_analyzed,
-                    "collision_candidates": metrics.collision_candidates,
-                    "bundles_split": metrics.bundles_split,
-                    "sub_bundles_created": metrics.sub_bundles_created,
-                    "mean_mibcs_improvement": metrics.mean_mibcs_improvement,
-                    "refinement_duration_ms": duration_ms,
-                    "collision_ip_threshold": self._refinement_settings.collision_ip_threshold,
-                    "collision_homogeneity_threshold": self._refinement_settings.collision_homogeneity_threshold,
-                    "similarity_threshold": self._refinement_settings.similarity_threshold,
-                    "min_sub_bundle_size": self._refinement_settings.min_sub_bundle_size,
-                    "min_mibcs_improvement": self._refinement_settings.min_mibcs_improvement,
-                },
-            )
-            logger.debug("Logged refinement run to session_refinement_log")
-        except Exception as e:
-            # Don't fail the main operation if logging fails
-            logger.warning(f"Failed to log refinement run: {e}")
+        self._refinement_audit.log_run(metrics, window_ms, duration_ms)
 
     def get_sessions_by_provider(
         self,
@@ -864,10 +664,7 @@ class SessionAggregator:
 
     def _get_url_details_table_ref(self) -> str:
         """Get fully qualified table reference for session_url_details."""
-        full_id = self._backend.get_full_table_id(self.URL_DETAILS_TABLE_NAME)
-        if self._backend.backend_type == "bigquery":
-            return f"`{full_id}`"
-        return full_id
+        return self._url_details._table_ref(self.URL_DETAILS_TABLE_NAME)
 
     def populate_url_details(
         self,
@@ -890,177 +687,7 @@ class SessionAggregator:
             Number of rows inserted
         """
         self.initialize()
-
-        sessions_table = self._get_table_ref()
-        details_table = self._get_url_details_table_ref()
-
-        # Build date filter
-        date_conditions = []
-        params: dict = {}
-        if start_date:
-            date_conditions.append("session_date >= :start_date")
-            params["start_date"] = str(start_date)
-        if end_date:
-            date_conditions.append("session_date <= :end_date")
-            params["end_date"] = str(end_date)
-
-        date_filter = (
-            f"WHERE {' AND '.join(date_conditions)}" if date_conditions else ""
-        )
-
-        # Delete existing data for date range if requested
-        if delete_existing and date_conditions:
-            delete_sql = f"DELETE FROM {details_table} {date_filter}"
-            try:
-                deleted = self._backend.execute(delete_sql, params)
-                logger.info(f"Deleted {deleted:,} existing URL detail rows")
-            except Exception as e:
-                logger.warning(f"Failed to delete existing URL details: {e}")
-
-        if self._backend.backend_type == "bigquery":
-            return self._populate_url_details_bigquery(
-                sessions_table, details_table, date_filter, params
-            )
-        else:
-            return self._populate_url_details_sqlite(
-                sessions_table, details_table, date_filter, params
-            )
-
-    def _populate_url_details_bigquery(
-        self,
-        sessions_table: str,
-        details_table: str,
-        date_filter: str,
-        params: dict,
-    ) -> int:
-        """Populate URL details using BigQuery UNNEST for efficiency."""
-        # Use UNNEST with offset to get URL position
-        # Use CURRENT_TIMESTAMP() to avoid issues with param conversion
-        sql = f"""
-            INSERT INTO {details_table} (
-                session_id, session_date, domain, url, url_position,
-                bot_provider, bot_name, fanout_session_name, confidence_level,
-                session_request_count, session_unique_urls, session_duration_ms,
-                mean_cosine_similarity, min_cosine_similarity, max_cosine_similarity,
-                session_start_time, session_end_time,
-                window_ms, splitting_strategy, _created_at
-            )
-            SELECT
-                s.session_id,
-                s.session_date,
-                s.domain,
-                url,
-                url_position,
-                s.bot_provider,
-                s.bot_name,
-                s.fanout_session_name,
-                s.confidence_level,
-                s.request_count AS session_request_count,
-                s.unique_urls AS session_unique_urls,
-                s.duration_ms AS session_duration_ms,
-                s.mean_cosine_similarity,
-                s.min_cosine_similarity,
-                s.max_cosine_similarity,
-                s.session_start_time,
-                s.session_end_time,
-                s.window_ms,
-                s.splitting_strategy,
-                CURRENT_TIMESTAMP() AS _created_at
-            FROM {sessions_table} s,
-            UNNEST(JSON_EXTRACT_STRING_ARRAY(s.url_list)) AS url WITH OFFSET AS url_position
-            {date_filter}
-        """
-
-        try:
-            rows = self._backend.execute(sql, params)
-            logger.info(f"Inserted {rows:,} URL detail rows (BigQuery)")
-            return rows
-        except Exception as e:
-            logger.error(f"Failed to populate URL details: {e}")
-            raise
-
-    def _populate_url_details_sqlite(
-        self,
-        sessions_table: str,
-        details_table: str,
-        date_filter: str,
-        params: dict,
-    ) -> int:
-        """Populate URL details for SQLite (requires row-by-row processing)."""
-        # Fetch sessions
-        sql = f"SELECT * FROM {sessions_table} {date_filter}"
-        sessions = self._backend.query(sql, params)
-
-        if not sessions:
-            logger.info("No sessions found to process")
-            return 0
-
-        now = datetime.now(timezone.utc).isoformat()
-        inserted = 0
-
-        for session in sessions:
-            try:
-                # Parse URL list from JSON
-                url_list = json.loads(session.get("url_list", "[]"))
-
-                for position, url in enumerate(url_list, start=1):
-                    insert_sql = f"""
-                        INSERT INTO {details_table} (
-                            session_id, session_date, domain, url, url_position,
-                            bot_provider, bot_name, fanout_session_name, confidence_level,
-                            session_request_count, session_unique_urls, session_duration_ms,
-                            mean_cosine_similarity, min_cosine_similarity, max_cosine_similarity,
-                            session_start_time, session_end_time,
-                            window_ms, splitting_strategy, _created_at
-                        ) VALUES (
-                            :session_id, :session_date, :domain, :url, :url_position,
-                            :bot_provider, :bot_name, :fanout_session_name, :confidence_level,
-                            :session_request_count, :session_unique_urls, :session_duration_ms,
-                            :mean_cosine_similarity, :min_cosine_similarity, :max_cosine_similarity,
-                            :session_start_time, :session_end_time,
-                            :window_ms, :splitting_strategy, :_created_at
-                        )
-                    """
-                    self._backend.execute(
-                        insert_sql,
-                        {
-                            "session_id": session["session_id"],
-                            "session_date": session["session_date"],
-                            "domain": session.get("domain"),
-                            "url": url,
-                            "url_position": position,
-                            "bot_provider": session["bot_provider"],
-                            "bot_name": session.get("bot_name"),
-                            "fanout_session_name": session.get("fanout_session_name"),
-                            "confidence_level": session["confidence_level"],
-                            "session_request_count": session["request_count"],
-                            "session_unique_urls": session["unique_urls"],
-                            "session_duration_ms": session["duration_ms"],
-                            "mean_cosine_similarity": session.get(
-                                "mean_cosine_similarity"
-                            ),
-                            "min_cosine_similarity": session.get(
-                                "min_cosine_similarity"
-                            ),
-                            "max_cosine_similarity": session.get(
-                                "max_cosine_similarity"
-                            ),
-                            "session_start_time": session["session_start_time"],
-                            "session_end_time": session["session_end_time"],
-                            "window_ms": session["window_ms"],
-                            "splitting_strategy": session.get("splitting_strategy"),
-                            "_created_at": now,
-                        },
-                    )
-                    inserted += 1
-
-            except Exception as e:
-                logger.warning(
-                    f"Failed to process session {session.get('session_id')}: {e}"
-                )
-
-        logger.info(f"Inserted {inserted:,} URL detail rows (SQLite)")
-        return inserted
+        return self._url_details.populate(start_date, end_date, delete_existing)
 
     def delete_url_details(
         self,
@@ -1078,26 +705,7 @@ class SessionAggregator:
             Number of rows deleted
         """
         self.initialize()
-        details_table = self._get_url_details_table_ref()
-
-        # Build date filter
-        conditions = []
-        params: dict = {}
-        if start_date:
-            conditions.append("session_date >= :start_date")
-            params["start_date"] = str(start_date)
-        if end_date:
-            conditions.append("session_date <= :end_date")
-            params["end_date"] = str(end_date)
-
-        where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
-        sql = f"DELETE FROM {details_table} {where_clause}"
-
-        try:
-            return self._backend.execute(sql, params)
-        except Exception as e:
-            logger.warning(f"Failed to delete URL details: {e}")
-            return 0
+        return self._url_details.delete(start_date, end_date)
 
     def get_url_details_summary(self) -> dict:
         """
@@ -1107,24 +715,4 @@ class SessionAggregator:
             Dictionary with summary statistics
         """
         self.initialize()
-        details_table = self._get_url_details_table_ref()
-
-        sql = f"""
-            SELECT
-                COUNT(*) as total_rows,
-                COUNT(DISTINCT session_id) as unique_sessions,
-                COUNT(DISTINCT url) as unique_urls,
-                COUNT(DISTINCT bot_provider) as unique_providers,
-                MIN(session_date) as earliest_date,
-                MAX(session_date) as latest_date
-            FROM {details_table}
-        """
-
-        try:
-            results = self._backend.query(sql)
-            if results:
-                return results[0]
-            return {}
-        except Exception as e:
-            logger.warning(f"Failed to get URL details summary: {e}")
-            return {"error": str(e)}
+        return self._url_details.summary()

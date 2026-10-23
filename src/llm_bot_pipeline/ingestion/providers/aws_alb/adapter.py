@@ -24,7 +24,7 @@ import logging
 import shlex
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Iterator, Optional, Union
+from typing import IO, Any, Iterable, Iterator, Optional, Union
 from urllib.parse import urlparse
 
 from ....utils.bot_classifier import classify_bot
@@ -104,6 +104,22 @@ class ALBAdapter(IngestionAdapter):
     def supported_source_types(self) -> list[str]:
         """Return list of supported source types."""
         return ["alb_log_file"]
+
+    def parse_stream(
+        self, handle: Union[IO[str], Iterable[str]]
+    ) -> Iterator[IngestionRecord]:
+        """Parse an ALB text stream into normalized records."""
+        for raw in handle:
+            line = raw.strip() if isinstance(raw, str) else ""
+            if not line:
+                continue
+            record = self.parse_line(line)
+            if record is not None:
+                yield record
+
+    def parse_line(self, line: str) -> Optional[IngestionRecord]:
+        """Parse a single ALB access-log line."""
+        return self._parse_alb_line(line)
 
     def ingest(
         self,

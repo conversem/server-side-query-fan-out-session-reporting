@@ -1,0 +1,34 @@
+apiVersion: run.googleapis.com/v1
+kind: Job
+metadata:
+  name: llm-bot-daily-etl
+  labels:
+    app: llm-bot-pipeline
+    component: daily-etl
+spec:
+  template:
+    metadata:
+      annotations:
+        run.googleapis.com/execution-environment: gen2
+    spec:
+      taskCount: 1
+      template:
+        spec:
+          containers:
+            - image: gcr.io/PROJECT_ID/llm-bot-pipeline:latest
+              command: ["python", "scripts/run_daily_etl.py"]
+              args: ["--processing-mode", "gcp_bq"]
+              env:
+                - name: PROCESSING_MODE
+                  value: gcp_bq
+                - name: USE_SECRET_MANAGER
+                  value: "true"
+                - name: GCP_PROJECT_ID
+                  value: PROJECT_ID
+              resources:
+                limits:
+                  memory: 4Gi
+                  cpu: "1"
+          timeoutSeconds: 43200
+          maxRetries: 0
+          serviceAccountName: SA_EMAIL

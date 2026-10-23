@@ -7,7 +7,7 @@ down to one row per (domain, url_path), keeping the most recent _fetched_at.
 
 Usage:
     python scripts/migrations/migrate_dedup_sitemap_urls.py \
-        --project ga-tot-gbq --dataset bot_logs [--dry-run]
+        --project example --dataset bot_logs [--dry-run]
 
 Rollback (if migration fails or table is found empty after abort):
     INSERT INTO `<project>.<dataset>.sitemap_urls`

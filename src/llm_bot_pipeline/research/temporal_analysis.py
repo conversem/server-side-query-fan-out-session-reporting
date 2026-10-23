@@ -190,6 +190,7 @@ class EnrichedBundle(Bundle):
     countries: list[str] = field(default_factory=list)
     bot_tags: list[str] = field(default_factory=list)
     bot_name: Optional[str] = None
+    domain: Optional[str] = None
 
     @property
     def unique_ips(self) -> set[str]:
@@ -280,6 +281,7 @@ class EnrichedBundle(Bundle):
         countries: Optional[list[str]] = None,
         bot_tags: Optional[list[str]] = None,
         bot_name: Optional[str] = None,
+        domain: Optional[str] = None,
     ) -> "EnrichedBundle":
         """
         Create EnrichedBundle from an existing Bundle.
@@ -291,6 +293,7 @@ class EnrichedBundle(Bundle):
             countries: List of country codes
             bot_tags: List of bot tags
             bot_name: Bot name (e.g., "ChatGPT-User")
+            domain: Domain name
 
         Returns:
             EnrichedBundle with all Bundle fields plus fingerprint data
@@ -308,6 +311,7 @@ class EnrichedBundle(Bundle):
             countries=countries or [],
             bot_tags=bot_tags or [],
             bot_name=bot_name,
+            domain=domain,
         )
 
 

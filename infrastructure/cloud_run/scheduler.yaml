@@ -1,0 +1,17 @@
+# Cloud Scheduler job to trigger the Cloud Run Job daily at 04:00 Brussels time.
+#
+# Replace PROJECT_ID, REGION, and SA_EMAIL with actual values before applying.
+# See docs/gcp-deployment.md for setup instructions.
+name: projects/PROJECT_ID/locations/REGION/jobs/daily-etl-trigger
+schedule: "0 4 * * *"
+timeZone: Europe/Brussels
+httpTarget:
+  uri: https://REGION-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/PROJECT_ID/jobs/llm-bot-daily-etl:run
+  httpMethod: POST
+  oauthToken:
+    serviceAccountEmail: SA_EMAIL
+    scope: https://www.googleapis.com/auth/cloud-platform
+retryConfig:
+  retryCount: 2
+  minBackoffDuration: 30s
+  maxBackoffDuration: 300s

@@ -18,7 +18,7 @@ from ..config.constants import BIGQUERY_BATCH_SIZE
 from ..storage import StorageBackend
 
 if TYPE_CHECKING:
-    from .session_aggregations import SessionRecord
+    from .session_models import SessionRecord
 
 logger = logging.getLogger(__name__)
 

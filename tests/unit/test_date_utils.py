@@ -1,16 +1,21 @@
 """Tests for date_utils."""
 
-from datetime import date, timezone
+from datetime import date, timedelta, timezone
 
 import pytest
 
-from llm_bot_pipeline.utils.date_utils import parse_date, utc_now
+from llm_bot_pipeline.utils.date_utils import parse_date, utc_now, utc_yesterday
 
 
 class TestUtcNow:
     def test_utc_now_returns_timezone_aware(self):
         now = utc_now()
         assert now.tzinfo is timezone.utc
+
+
+class TestUtcYesterday:
+    def test_utc_yesterday_is_one_day_before_utc_now(self):
+        assert utc_yesterday() == utc_now().date() - timedelta(days=1)
 
 
 class TestParseDate:

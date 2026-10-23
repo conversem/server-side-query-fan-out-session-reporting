@@ -259,7 +259,9 @@ DEFAULT_SCHEDULE = "0 4 * * *"
 DEFAULT_TIMEZONE = "Europe/Brussels"
 DEFAULT_CLOUD_RUN_MEMORY = "2Gi"
 DEFAULT_CLOUD_RUN_CPU = "1"
-DEFAULT_CLOUD_RUN_TIMEOUT_SECONDS = 3600
+# 12 hours. A daily job still finishes before the next scheduled run.
+# Headroom is for log-volume growth, not for overlap with the next day.
+DEFAULT_CLOUD_RUN_TIMEOUT_SECONDS = 12 * 60 * 60
 
 # =============================================================================
 # BigQuery Batch Sizes

@@ -145,6 +145,10 @@ class TestDataQualityChecker:
         report = checker.run_all_checks(check_date=check_date, skip_variance=True)
 
         assert isinstance(report, DataQualityReport)
+        aws_results = [
+            r for r in report.results if r.check_name == "aws_provider_balance"
+        ]
+        assert aws_results == []
         date_coverage_results = [
             r for r in report.results if r.check_name == "date_coverage"
         ]
@@ -152,6 +156,67 @@ class TestDataQualityChecker:
         assert date_coverage_results[0].status == QualityStatus.WARN
         assert "Incomplete date coverage" in date_coverage_results[0].message
         assert report.overall_status == QualityStatus.WARN
+
+    def test_data_quality_checker_runs_aws_checks_for_bigquery_backend(self):
+        backend = _make_backend()
+        backend.backend_type = "bigquery"
+        check_date = date(2025, 1, 16)
+        recent = datetime.now(timezone.utc) - timedelta(hours=1)
+
+        backend.query.side_effect = [
+            [
+                {
+                    "latest_timestamp": recent,
+                    "earliest_timestamp": recent,
+                    "row_count": 1000,
+                }
+            ],
+            [
+                {
+                    "min_date": check_date,
+                    "max_date": check_date,
+                    "distinct_dates": 1,
+                }
+            ],
+            [{"record_count": 500}],
+            [
+                {
+                    "total_rows": 500,
+                    "null_request_timestamp": 0,
+                    "null_request_date": 0,
+                    "null_bot_name": 0,
+                    "null_bot_provider": 0,
+                    "null_bot_category": 0,
+                    "null_response_status": 0,
+                }
+            ],
+            [
+                {
+                    "total_rows": 500,
+                    "invalid_request_hour": 0,
+                    "invalid_response_status": 0,
+                }
+            ],
+            [
+                {
+                    "unique_combinations": 500,
+                    "total_rows": 500,
+                    "duplicate_rows": 0,
+                    "max_occurrences": 1,
+                }
+            ],
+            [],
+            [],
+        ]
+
+        checker = DataQualityChecker(backend=backend)
+        report = checker.run_all_checks(check_date=check_date, skip_variance=True)
+
+        aws_results = [
+            r for r in report.results if r.check_name == "aws_provider_balance"
+        ]
+        assert len(aws_results) == 1
+        assert aws_results[0].status == QualityStatus.PASS
 
 
 class TestQualityCheckResult:

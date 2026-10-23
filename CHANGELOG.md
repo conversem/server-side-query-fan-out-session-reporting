@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.0] - 2026-10-23
+
+### Added
+
+- **BigQuery daily pipeline is part of the open-source tree.** Ingestion, transform, aggregations, dashboard queries, Cloud Run job setup, monitoring alerts, and Secret Manager config now ship with the project.
+- **Nightly auto-backfill.** A `gcp_bq` run can discover dates missing from BigQuery, skip days outside the Cloudflare retention window, and fill them inside a time budget.
+- **Shared AWS log scans.** Domains that read the same GCS prefix are downloaded once. Optional host filters split a shared load balancer. Date-partitioned objects outside the requested window are not downloaded.
+- **Cloud Run task timeout is 12 hours**, with a stuck-execution alert at 6 hours, so a daily job can grow without colliding with the next run.
+
+### Changed
+
+- Public sync no longer drops cloud features. Client secrets, encrypted config, credentials, and per-client Terraform trees stay out of the public repository.
+
 ## [2.1.3] - 2026-04-01
 
 ### Fixed

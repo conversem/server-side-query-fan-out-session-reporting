@@ -17,12 +17,16 @@ import argparse
 import json
 import logging
 import sys
-from datetime import date, datetime, timedelta
 from pathlib import Path
 
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
+from llm_bot_pipeline.config.settings import get_settings
+from llm_bot_pipeline.monitoring.quality_runner import (
+    create_quality_backend,
+    run_quality_checks,
+)
 from llm_bot_pipeline.pipeline import setup_logging
 from llm_bot_pipeline.storage import get_backend
 from llm_bot_pipeline.utils.date_utils import parse_date
@@ -53,7 +57,16 @@ Examples:
         "--backend",
         choices=["sqlite", "bigquery"],
         default=None,
-        help="Storage backend (default: from settings)",
+        help="Storage backend (default: from settings; cloud deployments use bigquery)",
+    )
+    parser.add_argument(
+        "--project-id",
+        help="GCP project ID for BigQuery quality checks (default: settings)",
+    )
+    parser.add_argument(
+        "--credentials-path",
+        type=Path,
+        help="Service-account JSON path for BigQuery checks (default: ADC/settings)",
     )
     parser.add_argument(
         "--db-path",
@@ -86,6 +99,21 @@ Examples:
         action="store_true",
         help="Use structured JSON logging (cloud environments)",
     )
+    parser.add_argument(
+        "--comprehensive",
+        action="store_true",
+        help="Deprecated: unified quality checks are now the default.",
+    )
+    parser.add_argument(
+        "--inventory",
+        action="store_true",
+        help="Run the legacy table inventory instead of unified quality checks.",
+    )
+    parser.add_argument(
+        "--skip-variance",
+        action="store_true",
+        help="Skip day-over-day count variance check.",
+    )
 
     args = parser.parse_args()
 
@@ -95,18 +123,38 @@ Examples:
     )
     logger = logging.getLogger(__name__)
 
+    settings = get_settings()
+    backend_type = args.backend or settings.storage_backend
+    project_id = args.project_id or settings.gcp_project_id or None
+    credentials_path = args.credentials_path or settings.service_account_key_path
+
     # Initialize backend
-    kwargs = {}
-    if args.db_path:
-        kwargs["db_path"] = args.db_path
-    backend = get_backend(args.backend, **kwargs)
+    if args.inventory:
+        kwargs = {}
+        if args.db_path:
+            kwargs["db_path"] = args.db_path
+        if backend_type == "bigquery":
+            if project_id:
+                kwargs["project_id"] = project_id
+            if credentials_path:
+                kwargs["credentials_path"] = credentials_path
+        backend = get_backend(backend_type, **kwargs)
+    else:
+        backend = create_quality_backend(
+            backend_type=backend_type,
+            project_id=project_id,
+            credentials_path=credentials_path,
+            db_path=args.db_path,
+        )
     backend.initialize()
 
     if not args.json:
         print()
         print("🔍 Data Quality Checks")
         print("=" * 50)
-        print(f"  Backend: sqlite")
+        print(f"  Backend: {backend.backend_type}")
+        if backend.backend_type == "bigquery" and project_id:
+            print(f"  GCP project: {project_id}")
         if args.db_path:
             print(f"  Database: {args.db_path}")
         if args.date:
@@ -116,6 +164,30 @@ Examples:
         print()
 
     try:
+        if not args.inventory:
+            report = run_quality_checks(
+                backend=backend,
+                domain_configs=settings.domains,
+                table_name=args.table or "bot_requests_daily",
+                check_date=args.date,
+                skip_variance=args.skip_variance,
+            )
+            if args.json:
+                print(json.dumps(report.to_dict(), indent=2, default=str))
+            else:
+                print(f"Status: {report.overall_status.value}")
+                print(
+                    "Summary: "
+                    f"{report.summary['passed']} passed, "
+                    f"{report.summary['warnings']} warning(s), "
+                    f"{report.summary['failed']} failed"
+                )
+                for result in report.results:
+                    print(
+                        f"- {result.status.value}: {result.check_name}: {result.message}"
+                    )
+            return 0 if report.passed else 1
+
         checks = {}
         tables = (
             [args.table]

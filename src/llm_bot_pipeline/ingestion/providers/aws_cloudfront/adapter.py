@@ -27,12 +27,12 @@ Field Mapping:
 import logging
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Iterator, Optional
+from typing import IO, Iterator, Optional
 
 from ....utils.bot_classifier import classify_bot
 from ...base import IngestionAdapter, IngestionRecord, IngestionSource
 from ...exceptions import ParseError, SourceValidationError
-from ...parsers import parse_w3c_file
+from ...parsers import W3CParser, parse_w3c_file
 from ...registry import IngestionRegistry
 from ...security import validate_path_safe
 
@@ -97,6 +97,11 @@ class CloudFrontAdapter(IngestionAdapter):
     def supported_source_types(self) -> list[str]:
         """Return list of supported source types."""
         return ["w3c_file"]
+
+    def parse_stream(self, handle: IO[str]) -> Iterator[IngestionRecord]:
+        """Parse a CloudFront W3C text stream into normalized records."""
+        parser = W3CParser()
+        return parser.parse(handle, self.CLOUDFRONT_FIELD_MAPPING)
 
     def ingest(
         self,

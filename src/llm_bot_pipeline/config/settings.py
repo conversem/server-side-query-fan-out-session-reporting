@@ -44,6 +44,16 @@ from .constants import (
     VALID_PROCESSING_MODES,
 )
 
+
+def _as_bool(value: Any) -> bool:
+    """Coerce YAML/env-style bools. Accepts real bools and true/1/yes strings."""
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() in ("true", "1", "yes")
+    return bool(value)
+
+
 # =============================================================================
 # Session Refinement Settings
 # =============================================================================
@@ -280,40 +290,242 @@ class UrlFilteringSettings:
 
 
 # =============================================================================
+# Nightly Auto-Backfill Settings
+# =============================================================================
+
+
+@dataclass
+class AutoBackfillSettings:
+    """Nightly auto-backfill knobs. YAML-only (`pipeline.auto_backfill`); not read from env."""
+
+    enabled: bool = True
+    lookback_days: int = 7
+    min_raw_rows: int = 100
+    time_budget_seconds: int = 2400
+    respect_cloudflare_retention: bool = True
+
+    def validate(self) -> list[str]:
+        errors: list[str] = []
+        if self.lookback_days < 1:
+            errors.append("auto_backfill.lookback_days must be >= 1")
+        if self.min_raw_rows < 1:
+            errors.append("auto_backfill.min_raw_rows must be >= 1")
+        if self.time_budget_seconds < 60:
+            errors.append("auto_backfill.time_budget_seconds must be >= 60")
+        return errors
+
+    @classmethod
+    def from_dict(cls, config: dict[str, Any]) -> "AutoBackfillSettings":
+        if not config:
+            return cls()
+        return cls(
+            enabled=_as_bool(config.get("enabled", True)),
+            lookback_days=int(config.get("lookback_days", 7)),
+            min_raw_rows=int(config.get("min_raw_rows", 100)),
+            time_budget_seconds=int(config.get("time_budget_seconds", 2400)),
+            respect_cloudflare_retention=_as_bool(
+                config.get("respect_cloudflare_retention", True)
+            ),
+        )
+
+
+# =============================================================================
 # Multi-Domain Configuration
 # =============================================================================
+
+VALID_AWS_SOURCE_TYPES = ("cloudfront", "alb")
+VALID_PROVIDERS = ("cloudflare", "aws_s3")
+
+
+@dataclass
+class HostFilter:
+    """Restrict AWS log ingestion to specific request hosts.
+
+    A single load balancer often serves multiple hosts. ``include_domain``
+    matches a registrable domain: the apex and any subdomain (``example.com``
+    keeps ``www.example.com`` but not ``example-dev.com``). ``exclude_hosts``
+    drops exact hostnames even when they match ``include_domain``.
+
+    Matching is case-insensitive and ignores any ``:port`` suffix. With no
+    ``include_domain`` and no ``exclude_hosts``, every host passes.
+    """
+
+    include_domain: Optional[str] = None
+    exclude_hosts: list[str] = field(default_factory=list)
+
+    @staticmethod
+    def _normalize(host: Optional[str]) -> str:
+        if not host:
+            return ""
+        return host.split(":", 1)[0].strip().lower()
+
+    def matches(self, host: Optional[str]) -> bool:
+        h = self._normalize(host)
+        if not h:
+            return False
+        if h in {self._normalize(e) for e in self.exclude_hosts}:
+            return False
+        if self.include_domain:
+            dom = self.include_domain.strip().lower().lstrip(".")
+            return h == dom or h.endswith("." + dom)
+        return True
+
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> "HostFilter":
+        return cls(
+            include_domain=d.get("include_domain"),
+            exclude_hosts=list(d.get("exclude_hosts", [])),
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        out: dict[str, Any] = {}
+        if self.include_domain:
+            out["include_domain"] = self.include_domain
+        if self.exclude_hosts:
+            out["exclude_hosts"] = list(self.exclude_hosts)
+        return out
+
+
+@dataclass
+class AWSSourceConfig:
+    """Configuration for an AWS S3 log source attached to a domain.
+
+    The `source_type` selects between CloudFront (W3C extended log format) and
+    ALB (space-separated). The pipeline reads logs from the GCS staging prefix
+    populated by GCP Storage Transfer Service — never from S3 directly.
+
+    `host_filter` optionally restricts ingestion to specific request hosts when
+    one log prefix carries traffic for more than one host.
+    """
+
+    source_type: str
+    s3_bucket: str
+    s3_prefixes: list[str]
+    gcs_staging_prefix: str
+    reader_role_arn: str
+    host_filter: Optional[HostFilter] = None
+
+    def __post_init__(self) -> None:
+        if self.source_type not in VALID_AWS_SOURCE_TYPES:
+            raise ValueError(
+                f"AWSSourceConfig.source_type must be one of "
+                f"{VALID_AWS_SOURCE_TYPES!r}, got {self.source_type!r}"
+            )
+        if not self.s3_prefixes:
+            raise ValueError("AWSSourceConfig.s3_prefixes must be non-empty")
+        if not self.gcs_staging_prefix.startswith("gs://"):
+            raise ValueError(
+                "AWSSourceConfig.gcs_staging_prefix must start with 'gs://'"
+            )
+
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> "AWSSourceConfig":
+        prefixes = d.get("s3_prefixes")
+        if prefixes is None:
+            legacy = d.get("s3_prefix")
+            prefixes = [legacy] if legacy else []
+        host_filter_block = d.get("host_filter")
+        return cls(
+            source_type=d["source_type"],
+            s3_bucket=d["s3_bucket"],
+            s3_prefixes=prefixes,
+            gcs_staging_prefix=d["gcs_staging_prefix"],
+            reader_role_arn=d["reader_role_arn"],
+            host_filter=(
+                HostFilter.from_dict(host_filter_block) if host_filter_block else None
+            ),
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        out = {
+            "source_type": self.source_type,
+            "s3_bucket": self.s3_bucket,
+            "s3_prefixes": list(self.s3_prefixes),
+            "gcs_staging_prefix": self.gcs_staging_prefix,
+            "reader_role_arn": self.reader_role_arn,
+        }
+        if self.host_filter is not None:
+            out["host_filter"] = self.host_filter.to_dict()
+        return out
+
+
+def _normalize_host_suffix(value: str, domain: str) -> str:
+    """Apex + *.(suffix) catch-all. `*.example.com` on domain fills suffix."""
+    raw = (value or "").strip().lower()
+    if not raw and domain.startswith("*."):
+        raw = domain[2:]
+    return raw.lstrip("*.").lstrip(".")
 
 
 @dataclass
 class DomainConfig:
     """Configuration for a single domain in multi-domain setups.
 
-    Each domain maps to one Cloudflare zone. The ``domain`` label is injected
-    into every ingested record so that shared BigQuery datasets can be filtered
-    per domain.
+    Each domain has one log-source provider (`cloudflare` by default, or
+    `aws_s3`). The `domain` label is injected into every ingested record so
+    that the shared BigQuery dataset can be filtered per domain regardless of
+    provider. Optional ``host_suffix`` (e.g. ``example.com``) makes discovery
+    count apex + ``*.suffix`` hosts instead of the stamped domain label.
     """
 
     domain: str
-    zone_id: str
+    zone_id: str = ""
     cf_token: str = ""
     sitemaps: list[str] = field(default_factory=list)
+    provider: str = "cloudflare"
+    aws: Optional[AWSSourceConfig] = None
+    host_suffix: str = ""
+
+    def __post_init__(self) -> None:
+        self.host_suffix = _normalize_host_suffix(self.host_suffix, self.domain)
+        if self.provider not in VALID_PROVIDERS:
+            raise ValueError(
+                f"DomainConfig.provider must be one of {VALID_PROVIDERS!r}, "
+                f"got {self.provider!r}"
+            )
+        if self.provider == "cloudflare" and not self.zone_id:
+            raise ValueError(
+                f"DomainConfig(provider='cloudflare') requires zone_id "
+                f"(domain={self.domain!r})"
+            )
+        if self.provider == "aws_s3" and self.aws is None:
+            raise ValueError(
+                f"DomainConfig(provider='aws_s3') requires an aws block "
+                f"(domain={self.domain!r})"
+            )
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> "DomainConfig":
+        provider = d.get("provider", "cloudflare")
+        aws_block = d.get("aws")
+        if aws_block and provider != "aws_s3":
+            raise ValueError(
+                f"DomainConfig(domain={d['domain']!r}) has an aws block but "
+                f"provider={provider!r}; aws is only valid for provider='aws_s3'"
+            )
         return cls(
             domain=d["domain"],
-            zone_id=d["zone_id"],
+            zone_id=d.get("zone_id", ""),
             cf_token=d.get("cf_token", ""),
             sitemaps=d.get("sitemaps", []),
+            provider=provider,
+            aws=AWSSourceConfig.from_dict(aws_block) if aws_block else None,
+            host_suffix=str(d.get("host_suffix", "") or ""),
         )
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        out: dict[str, Any] = {
             "domain": self.domain,
             "zone_id": self.zone_id,
             "cf_token": self.cf_token,
             "sitemaps": self.sitemaps,
+            "provider": self.provider,
         }
+        if self.host_suffix:
+            out["host_suffix"] = self.host_suffix
+        if self.aws is not None:
+            out["aws"] = self.aws.to_dict()
+        return out
 
 
 # =============================================================================
@@ -339,6 +551,7 @@ class Settings:
     # GCP Settings
     gcp_project_id: str = ""
     gcp_location: str = "EU"
+    gcp_service_account_unique_id: str = ""
     service_account_key_path: Path = field(default_factory=lambda: Path(KEY_FILE_NAME))
 
     # BigQuery Settings (dual-dataset architecture)
@@ -393,9 +606,27 @@ class Settings:
     # URL Resource Type Filtering
     url_filtering: UrlFilteringSettings = field(default_factory=UrlFilteringSettings)
 
+    # Nightly auto-backfill (gcp_bq hole-fill)
+    auto_backfill: AutoBackfillSettings = field(default_factory=AutoBackfillSettings)
+
+    def _validate_no_duplicate_domains(self) -> list[str]:
+        """Reject configs where the same domain label appears with different providers."""
+        errors: list[str] = []
+        seen: dict[str, str] = {}
+        for dc in self.domains:
+            prev = seen.get(dc.domain)
+            if prev is not None and prev != dc.provider:
+                errors.append(
+                    f"Settings.domains has duplicate domain {dc.domain!r} with "
+                    f"conflicting providers ({prev!r} and {dc.provider!r}). "
+                    f"Only one DomainConfig per domain may be active at a time."
+                )
+            seen[dc.domain] = dc.provider
+        return errors
+
     def validate(self) -> list[str]:
         """Validate required settings are present. Returns list of errors."""
-        errors = []
+        errors = self._validate_no_duplicate_domains()
 
         if self.processing_mode not in VALID_PROCESSING_MODES:
             errors.append(
@@ -434,6 +665,7 @@ class Settings:
 
         errors.extend(self.session_refinement.validate())
         errors.extend(self.url_filtering.validate())
+        errors.extend(self.auto_backfill.validate())
 
         return errors
 
@@ -537,6 +769,7 @@ class Settings:
             sqlite_db_path=storage.get("sqlite_db_path", "data/llm-bot-logs.db"),
             gcp_project_id=gcp.get("project_id", ""),
             gcp_location=gcp.get("location", "EU"),
+            gcp_service_account_unique_id=gcp.get("service_account_unique_id", ""),
             service_account_key_path=Path(
                 gcp.get("service_account_key_path", KEY_FILE_NAME)
             ),
@@ -562,6 +795,9 @@ class Settings:
             ),
             session_refinement=SessionRefinementSettings.from_dict(sr),
             url_filtering=UrlFilteringSettings.from_dict(uf),
+            auto_backfill=AutoBackfillSettings.from_dict(
+                pipeline.get("auto_backfill", {})
+            ),
         )
 
     @classmethod
@@ -573,6 +809,9 @@ class Settings:
             sqlite_db_path=os.environ.get("SQLITE_DB_PATH", "data/llm-bot-logs.db"),
             gcp_project_id=os.environ.get("GCP_PROJECT_ID", ""),
             gcp_location=os.environ.get("GCP_LOCATION", "EU"),
+            gcp_service_account_unique_id=os.environ.get(
+                "GCP_SERVICE_ACCOUNT_UNIQUE_ID", ""
+            ),
             service_account_key_path=Path(
                 os.environ.get("GCP_SERVICE_ACCOUNT_KEY", KEY_FILE_NAME)
             ),
@@ -598,11 +837,10 @@ class Settings:
             ),
             vacuum_threshold=int(os.environ.get("SQLITE_VACUUM_THRESHOLD", "10000")),
             checkpoint_path=os.environ.get("CHECKPOINT_PATH", "data/checkpoint.json"),
-            json_logs=os.environ.get("JSON_LOGS", "").lower() in ("true", "1", "yes"),
-            metrics_export_enabled=os.environ.get(
-                "METRICS_EXPORT_ENABLED", "false"
-            ).lower()
-            in ("true", "1", "yes"),
+            json_logs=_as_bool(os.environ.get("JSON_LOGS", "")),
+            metrics_export_enabled=_as_bool(
+                os.environ.get("METRICS_EXPORT_ENABLED", "false")
+            ),
             metrics_backend=os.environ.get("METRICS_BACKEND", "prometheus"),
             metrics_pushgateway_url=os.environ.get(
                 "METRICS_PUSHGATEWAY_URL", "http://localhost:9091"

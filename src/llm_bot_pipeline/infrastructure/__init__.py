@@ -1,11 +1,8 @@
 """Infrastructure setup module for GCP resources."""
 
-__all__ = ["BigQuerySetup", "ServiceAccountManager", "setup_gcp_bq_infrastructure"]
+from .service_account import ServiceAccountManager
 
-try:
-    from .service_account import ServiceAccountManager
-except ImportError:
-    ServiceAccountManager = None  # GCP service account module not available
+__all__ = ["BigQuerySetup", "ServiceAccountManager", "setup_gcp_bq_infrastructure"]
 
 try:
     from .bigquery_setup import BigQuerySetup

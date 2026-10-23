@@ -13,7 +13,7 @@ import re
 import tempfile
 from datetime import date, datetime, timezone
 from pathlib import Path
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from ..config.constants import BATCH_THRESHOLD
 from ..monitoring.retry_handler import RetryConfig, RetryManager
@@ -29,6 +29,9 @@ from .base import (
 )
 from .bigquery_schemas import TABLE_CONFIG, _get_table_schemas
 from .bigquery_views import create_views as _create_bq_views
+
+if TYPE_CHECKING:
+    from google.cloud.bigquery import ArrayQueryParameter, ScalarQueryParameter
 
 logger = logging.getLogger(__name__)
 
@@ -66,6 +69,28 @@ def _get_bq_type(value: Any, param_name: str = "") -> str:
     elif isinstance(value, date):
         return "DATE"
     return "STRING"
+
+
+def _as_query_parameter(
+    name: str, value: Any
+) -> "ScalarQueryParameter | ArrayQueryParameter":
+    from google.cloud import bigquery
+
+    if isinstance(value, (list, tuple)):
+        # Empty arrays have no element to infer from; STRING is the safe fallback.
+        elem_type = _get_bq_type(value[0], name) if value else "STRING"
+        return bigquery.ArrayQueryParameter(name, elem_type, list(value))
+    return bigquery.ScalarQueryParameter(name, _get_bq_type(value, name), value)
+
+
+def _job_config(params: dict):
+    from google.cloud import bigquery
+
+    return bigquery.QueryJobConfig(
+        query_parameters=[
+            _as_query_parameter(name, value) for name, value in params.items()
+        ]
+    )
 
 
 # =============================================================================
@@ -268,22 +293,12 @@ class BigQueryBackend(StorageBackend):
 
     def query(self, sql: str, params: Optional[dict] = None) -> list[dict]:
         """Execute query (supports both :param and @param syntax)."""
-        from google.cloud import bigquery
-
         client = self._get_client()
         sql = _convert_sqlite_params_to_bigquery(sql)
 
         try:
             if params:
-                job_config = bigquery.QueryJobConfig(
-                    query_parameters=[
-                        bigquery.ScalarQueryParameter(
-                            name, _get_bq_type(value, name), value
-                        )
-                        for name, value in params.items()
-                    ]
-                )
-                job = client.query(sql, job_config=job_config)
+                job = client.query(sql, job_config=_job_config(params))
             else:
                 job = client.query(sql)
 
@@ -295,22 +310,12 @@ class BigQueryBackend(StorageBackend):
 
     def execute(self, sql: str, params: Optional[dict] = None) -> int:
         """Execute DML/DDL (supports both :param and @param syntax)."""
-        from google.cloud import bigquery
-
         client = self._get_client()
         sql = _convert_sqlite_params_to_bigquery(sql)
 
         try:
             if params:
-                job_config = bigquery.QueryJobConfig(
-                    query_parameters=[
-                        bigquery.ScalarQueryParameter(
-                            name, _get_bq_type(value, name), value
-                        )
-                        for name, value in params.items()
-                    ]
-                )
-                job = client.query(sql, job_config=job_config)
+                job = client.query(sql, job_config=_job_config(params))
             else:
                 job = client.query(sql)
 
@@ -492,7 +497,7 @@ class BigQueryBackend(StorageBackend):
             table_id = self._get_full_table_id("sitemap_urls")
             domain_list = ", ".join(f"'{d}'" for d in domains)
             delete_sql = f"DELETE FROM `{table_id}` WHERE domain IN ({domain_list})"
-            self._client.query(delete_sql).result()
+            self._get_client().query(delete_sql).result()
 
         now = datetime.now(timezone.utc).isoformat()
         rows = [

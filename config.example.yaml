@@ -35,11 +35,26 @@ cloudflare:
 domains:
   - domain: "example.com"
     zone_id: "your-zone-id-1"
+    provider: "cloudflare"
     db_name: "example.db"
     sitemaps:
       - "https://example.com/sitemap.xml"
+    # Optional: discovery counts apex + *.suffix hosts (not only the stamped label)
+    # host_suffix: "example.com"
+  # AWS S3-backed domain (CloudFront or ALB logs copied to GCS by Storage Transfer Service)
+  # - domain: "aws-example.com"
+  #   zone_id: ""                           # not used for AWS
+  #   provider: "aws_s3"
+  #   aws:
+  #     source_type: "alb"                  # "alb" or "cloudfront"
+  #     s3_bucket: "client-aws-log-bucket"
+  #     s3_prefixes:
+  #       - "alb/entrypoint/"
+  #     gcs_staging_prefix: "gs://client-aws-logs-staging/alb/"
+  #     reader_role_arn: "arn:aws:iam::123456789012:role/aws-logs-reader-client"
   # - domain: "another-domain.com"
   #   zone_id: "your-zone-id-2"
+  #   provider: "cloudflare"
   #   db_name: "another-domain.db"
   #   sitemaps:
   #     - "https://another-domain.com/sitemap.xml"
@@ -51,6 +66,14 @@ gcp:
   project_id: "your-gcp-project-id"
   location: "EU"                          # BigQuery dataset location
   service_account_key_path: "credentials/bigquery_key.json"
+  service_account_unique_id: "1234567890123456789"  # Optional: pipeline service account unique ID
+
+# AWS onboarding note:
+# Storage Transfer Service uses its Google-managed service agent, not the
+# pipeline service account, when assuming the AWS reader role. Retrieve that
+# service agent subjectId and pass it to Terraform as gcp_sts_subject_id:
+# curl -H "Authorization: Bearer $(gcloud auth print-access-token)" \
+#   "https://storagetransfer.googleapis.com/v1/googleServiceAccounts/<project-id>"
 
 # =============================================================================
 # BigQuery Dataset Names (only used when backend = "bigquery")
@@ -157,6 +180,18 @@ url_filtering:
     - /vendor/
     - /node_modules/
     - /__/
+
+# =============================================================================
+# Pipeline
+# =============================================================================
+# pipeline:
+#   processing_mode: gcp_bq
+#   auto_backfill:
+#     enabled: true
+#     lookback_days: 7
+#     min_raw_rows: 100
+#     time_budget_seconds: 2400
+#     respect_cloudflare_retention: true
 
 # =============================================================================
 # Monitoring & Alerting

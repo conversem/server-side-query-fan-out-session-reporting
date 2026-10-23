@@ -41,7 +41,7 @@ INDEX_XML = """\
 
 class TestNormalizeUrlPath:
     def test_strips_scheme_and_host(self):
-        assert normalize_url_path("https://example.com/foo/bar") == "/foo/bar"
+        assert normalize_url_path("https://example.com/foo/bar") == "/foo/bar/"
 
     def test_preserves_trailing_slash(self):
         assert normalize_url_path("https://example.com/foo/") == "/foo/"
@@ -50,7 +50,7 @@ class TestNormalizeUrlPath:
         assert normalize_url_path("https://example.com") == "/"
 
     def test_lowercases(self):
-        assert normalize_url_path("https://example.com/Foo/BAR") == "/foo/bar"
+        assert normalize_url_path("https://example.com/Foo/BAR") == "/foo/bar/"
 
 
 class TestNormalizeLastmod:
@@ -92,7 +92,7 @@ class TestParseUrlset:
 
         assert len(entries) == 3
         assert entries[0].url == "https://example.com/page-a"
-        assert entries[0].url_path == "/page-a"
+        assert entries[0].url_path == "/page-a/"
         assert entries[0].lastmod == "2025-01-15"
         assert entries[0].lastmod_month == "2025-01"
 

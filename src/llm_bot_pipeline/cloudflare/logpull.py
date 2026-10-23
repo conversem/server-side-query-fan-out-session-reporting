@@ -25,7 +25,7 @@ import httpx
 from cloudflare import Cloudflare
 
 from ..config.constants import OUTPUT_FIELDS
-from ..config.settings import Settings, get_settings
+from ..config.settings import DomainConfig, Settings, get_settings
 from ..utils.bot_classifier import classify_bot
 
 logger = logging.getLogger(__name__)
@@ -376,27 +376,29 @@ def _fetch_logs_chunk(
 def pull_logs_for_date_range(
     start_date: date,
     end_date: date,
-    zone_id: Optional[str] = None,
-    domain: Optional[str] = None,
+    domain_config: DomainConfig,
     settings: Optional[Settings] = None,
     filter_llm_bots: bool = True,
 ) -> Iterator[dict]:
     """
-    Convenience function to pull logs for a date range.
-
-    Converts dates to datetimes (midnight to midnight UTC).
+    Pull Cloudflare logs for a date range (midnight to midnight UTC).
 
     Args:
         start_date: Start date
         end_date: End date (inclusive)
-        zone_id: Cloudflare zone ID (uses settings if None)
-        domain: Domain label injected into each record (for multi-domain support)
+        domain_config: DomainConfig with provider='cloudflare' and zone_id set
         settings: Application settings
         filter_llm_bots: Filter for LLM bots by user-agent
 
     Yields:
         Log record dictionaries
     """
+    if domain_config.provider != "cloudflare":
+        raise ValueError(
+            f"pull_logs_for_date_range requires provider='cloudflare', got "
+            f"{domain_config.provider!r}"
+        )
+
     start_time = datetime.combine(start_date, datetime.min.time(), tzinfo=timezone.utc)
     end_time = datetime.combine(
         end_date + timedelta(days=1), datetime.min.time(), tzinfo=timezone.utc
@@ -405,8 +407,8 @@ def pull_logs_for_date_range(
     yield from pull_logs(
         start_time=start_time,
         end_time=end_time,
-        zone_id=zone_id,
-        domain=domain,
+        zone_id=domain_config.zone_id,
+        domain=domain_config.domain or None,
         settings=settings,
         filter_llm_bots=filter_llm_bots,
     )
@@ -455,6 +457,14 @@ def ingest_to_sqlite(
     if settings is None:
         settings = get_settings()
 
+    resolved_zone_id = zone_id if zone_id is not None else settings.cloudflare_zone_id
+    resolved_domain = domain if domain is not None else ""
+    domain_config = DomainConfig(
+        domain=resolved_domain,
+        zone_id=resolved_zone_id,
+        provider="cloudflare",
+    )
+
     # Initialize SQLite backend
     backend_kwargs = {}
     if db_path:
@@ -481,10 +491,9 @@ def ingest_to_sqlite(
         for record in pull_logs_for_date_range(
             start_date=start_date,
             end_date=end_date,
+            domain_config=domain_config,
             settings=settings,
             filter_llm_bots=filter_llm_bots,
-            zone_id=zone_id,
-            domain=domain,
         ):
             batch.append(record)
 

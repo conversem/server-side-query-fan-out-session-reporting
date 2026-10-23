@@ -37,13 +37,23 @@ class SitemapEntry:
 def normalize_url_path(url: str) -> str:
     """Extract and normalize the path from a full URL.
 
-    Strips scheme/host, lowercases. Preserves trailing slash to match
-    server log URL format.
-    E.g. ``https://www.example.com/some/path/`` -> ``/some/path/``
+    Strips scheme/host, lowercases, and enforces a trailing slash on
+    directory-style paths (no file extension) to match the server log
+    URL format used by Cloudflare and other CDN providers.
+
+    E.g.
+        ``https://www.example.com/some/path/``  -> ``/some/path/``
+        ``https://www.example.com/some/path``   -> ``/some/path/``
+        ``https://www.example.com/file.pdf``    -> ``/file.pdf``
     """
     parsed = urlparse(url)
-    path = parsed.path or "/"
-    return path.lower()
+    path = (parsed.path or "/").lower()
+    # Add trailing slash when there is no file extension (directory paths).
+    # This keeps url_path consistent regardless of whether the sitemap
+    # happens to include or omit the trailing slash.
+    if "." not in path.rsplit("/", 1)[-1]:
+        path = path.rstrip("/") + "/"
+    return path
 
 
 def normalize_lastmod(raw: Optional[str]) -> tuple[Optional[str], Optional[str]]:

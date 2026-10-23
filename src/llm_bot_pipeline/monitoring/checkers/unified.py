@@ -10,6 +10,8 @@ from datetime import date, timedelta
 from typing import TYPE_CHECKING, Optional
 
 from ...config.constants import DATASET_RAW, DATASET_REPORT
+from ...config.settings import DomainConfig
+from .aws_provider_balance import AwsProviderBalanceChecker
 from .duplicate import DuplicateChecker
 from .freshness import FreshnessChecker
 from .models import DataQualityReport, QualityCheckResult
@@ -20,6 +22,11 @@ if TYPE_CHECKING:
     from ...storage.base import StorageBackend
 
 logger = logging.getLogger(__name__)
+
+
+def _is_bigquery_backend(backend: "StorageBackend") -> bool:
+    backend_type = getattr(backend, "backend_type", "")
+    return backend_type == "bigquery" or backend.__class__.__name__ == "BigQueryBackend"
 
 
 class DataQualityChecker:
@@ -57,6 +64,7 @@ class DataQualityChecker:
         table_name: str = "bot_requests_daily",
         dataset_raw: str = DATASET_RAW,
         dataset_report: str = DATASET_REPORT,
+        domain_configs: Optional[list[DomainConfig]] = None,
     ):
         self.backend = backend
         self.table_name = table_name
@@ -67,6 +75,15 @@ class DataQualityChecker:
         self.count_checker = RecordCountChecker(backend=backend)
         self.schema_checker = SchemaChecker(backend=backend)
         self.duplicate_checker = DuplicateChecker(backend=backend)
+        self.aws_balance_checker: Optional[AwsProviderBalanceChecker] = None
+        if _is_bigquery_backend(backend):
+            expected_aws = AwsProviderBalanceChecker.expected_pairs_from_domains(
+                domain_configs or []
+            )
+            self.aws_balance_checker = AwsProviderBalanceChecker(
+                backend=backend,
+                expected_aws_pairs=expected_aws,
+            )
 
     def run_all_checks(
         self,
@@ -145,6 +162,17 @@ class DataQualityChecker:
                 check_date=check_date,
             )
         )
+
+        if self.aws_balance_checker is not None:
+            results.append(
+                self.aws_balance_checker.check_balance(check_date=check_date)
+            )
+            results.append(
+                self.aws_balance_checker.check_row_count_band(check_date=check_date)
+            )
+            results.append(
+                self.aws_balance_checker.check_dedup_ratio(check_date=check_date)
+            )
 
         report = DataQualityReport(
             table_name=table_name,
