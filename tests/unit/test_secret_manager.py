@@ -177,7 +177,10 @@ class TestLoadConfigImportError:
 
         saved = sys.modules.pop("google.cloud.secretmanager", None)
         parent = sys.modules.get("google.cloud")
-        if parent is not None and hasattr(parent, "secretmanager"):
+        saved_attr = (
+            getattr(parent, "secretmanager", None) if parent is not None else None
+        )
+        if parent is not None and saved_attr is not None:
             delattr(parent, "secretmanager")
         try:
             orig_import = builtins.__import__
@@ -193,6 +196,8 @@ class TestLoadConfigImportError:
         finally:
             if saved is not None:
                 sys.modules["google.cloud.secretmanager"] = saved
+            if parent is not None and saved_attr is not None:
+                setattr(parent, "secretmanager", saved_attr)
 
 
 class TestIsSecretManagerEnabled:

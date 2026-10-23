@@ -52,7 +52,7 @@ dev = [
     "pytest-benchmark>=4.0.0",
     "pytest-cov>=4.1.0",
     "pytest-timeout>=2.0.0",
-    "freezegun>=1.2.0",
+    "freezegun>=1.2.0,<1.6",
 ]
 viz = [
     "matplotlib>=3.7.0",

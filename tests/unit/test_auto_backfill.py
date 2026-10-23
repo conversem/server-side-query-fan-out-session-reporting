@@ -3,8 +3,6 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from freezegun import freeze_time
-
 from llm_bot_pipeline.pipeline.daily import auto_backfill as auto_mod
 from llm_bot_pipeline.pipeline.daily.auto_backfill import (
     DayRunPolicy,
@@ -312,8 +310,13 @@ def test_run_auto_backfill_pipeline_lookback_start_respects_cloudflare_floor(
             _missing(date(2026, 8, 9), "www.example.com", REASON_EMPTY_SOURCE),
         ]
 
+    class _Clock:
+        @staticmethod
+        def now(tz=None):
+            return datetime(2026, 8, 14, 4, 0, tzinfo=timezone.utc)
+
     with (
-        freeze_time(datetime(2026, 8, 14, 4, 0, tzinfo=timezone.utc)),
+        patch.object(auto_mod, "datetime", _Clock),
         caplog.at_level("INFO"),
         _patch_auto(list_missing=list_missing_days) as mock_run,
     ):

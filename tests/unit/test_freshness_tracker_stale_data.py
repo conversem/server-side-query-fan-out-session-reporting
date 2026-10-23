@@ -18,15 +18,16 @@ class TestFreshnessTrackerStaleData:
         tracker = DataFreshnessTracker(backend=backend)
         tracker.initialize()
 
-        # Simulate update from 3 days ago
-        old_time = datetime.now(timezone.utc) - timedelta(days=3)
+        # Three days before the frozen test clock (2024-01-15), and also old
+        # relative to a real wall clock if time is not frozen.
+        old_time = datetime(2024, 1, 12, tzinfo=timezone.utc)
         with patch("llm_bot_pipeline.reporting.freshness_tracker.datetime") as mock_dt:
             mock_dt.now.return_value = old_time
             mock_dt.fromisoformat = datetime.fromisoformat
 
             tracker.update_freshness(
                 table_name="daily_summary",
-                last_processed_date=date.today() - timedelta(days=3),
+                last_processed_date=date(2024, 1, 12),
                 rows_processed=100,
             )
 

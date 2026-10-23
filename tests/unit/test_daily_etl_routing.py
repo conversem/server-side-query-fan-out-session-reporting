@@ -165,7 +165,7 @@ class TestDailyEtlAutoBackfill:
         return mock_settings
 
     def test_unflagged_gcp_bq_uses_auto_backfill(self):
-        yesterday = datetime.now(timezone.utc).date() - timedelta(days=1)
+        yesterday = date(2024, 1, 14)
         with patch(
             "sys.argv",
             ["run_daily_etl", "--processing-mode", "gcp_bq", "--no-log-file"],
@@ -244,7 +244,7 @@ class TestDailyEtlAutoBackfill:
         mock_auto.assert_not_called()
 
     def test_days_one_still_uses_auto_backfill(self):
-        yesterday = datetime.now(timezone.utc).date() - timedelta(days=1)
+        yesterday = date(2024, 1, 14)
         with (
             patch(
                 "sys.argv",
