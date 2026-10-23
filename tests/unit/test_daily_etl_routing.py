@@ -3,10 +3,10 @@
 from datetime import date, datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 
-# Import before autouse freezegun; a late pandas import via bigquery segfaults.
-from google.cloud.bigquery import ScalarQueryParameter  # noqa: F401
-
 import pytest
+
+# Import before autouse freezegun; a late pandas import via bigquery segfaults.
+from google.cloud.bigquery import ScalarQueryParameter  # noqa: F401  # isort: skip
 
 
 class TestDailyEtlLocalSqliteMode:

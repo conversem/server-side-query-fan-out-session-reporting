@@ -32,7 +32,7 @@ from google.cloud import bigquery
 
 from llm_bot_pipeline.storage.bigquery_schemas import TABLE_CONFIG, _get_table_schemas
 
-PROJECT = "example"
+PROJECT = "example-project"
 DS_RAW = "bot_logs_raw"
 DS_REPORT = "bot_logs"
 DS_STAGING = "bot_logs_staging"
@@ -140,7 +140,9 @@ def copy_data_same_region(client, src_ds, dst_ds, tables, dry_run=False):
         dst = f"`{PROJECT}.{dst_ds}.{tbl}`"
 
         if dry_run:
-            print(f"  {tbl}: [DRY-RUN] INSERT INTO {dst_ds}.{tbl} SELECT ... FROM {src_ds}.{tbl}")
+            print(
+                f"  {tbl}: [DRY-RUN] INSERT INTO {dst_ds}.{tbl} SELECT ... FROM {src_ds}.{tbl}"
+            )
             continue
 
         src_table = client.get_table(f"{PROJECT}.{src_ds}.{tbl}")
@@ -278,9 +280,7 @@ def main():
             if resp.lower() != "y":
                 print("  Aborted.")
                 sys.exit(0)
-        delete_datasets(
-            client, [DS_REPORT, DS_RAW, DS_STAGING], args.dry_run
-        )
+        delete_datasets(client, [DS_REPORT, DS_RAW, DS_STAGING], args.dry_run)
 
     if args.step is None or args.step == 4:
         print("\n" + "=" * 60)
