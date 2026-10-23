@@ -6,7 +6,7 @@
 |-----------|--------|----------------------|
 | **Best for** | Local dev, single-machine analysis | Local pipeline pushing to cloud |
 | **Setup** | Zero config (auto-creates file) | GCP project + service account |
-| **Reporting** | Multi-sheet Excel workbooks | Looker Studio (Enterprise) |
+| **Reporting** | Multi-sheet Excel workbooks | Looker Studio (see dashboard-guide.md) |
 | **Cost** | Free | Pay-per-query (GCP billing) |
 | **Concurrency** | Single-writer | Unlimited concurrent readers |
 | **Streaming** | No | Yes (BigQuery Storage API) |
@@ -19,7 +19,7 @@
 - Want multi-sheet Excel output with zero cloud? → **SQLite**
 - Running multi-domain analysis locally? → **SQLite** (per-domain databases)
 - Want to push data to BigQuery from your machine? → **local_bq_buffered** or **local_bq_streaming**
-- Need fully-managed production pipeline with dashboards? → **Enterprise** (see below)
+- Need the daily BigQuery pipeline on Cloud Run? → **`gcp_bq`** (see below)
 
 ## SQLite Backend
 
@@ -158,10 +158,6 @@ python scripts/ingest_logs.py --provider cloudflare --input ./logs/ --stream
 
 See [processing-modes.md](processing-modes.md) for a full comparison of modes.
 
-## Enterprise: Fully-Managed BigQuery Pipeline
+## BigQuery daily pipeline (`gcp_bq`)
 
-For production workloads requiring automated scheduling, Looker Studio dashboards,
-monitoring, and multi-domain cloud orchestration, we offer an enterprise managed
-implementation on your own GCP infrastructure.
-
-[Contact us](https://conversem.com/contact/) for enterprise details.
+The daily BigQuery pipeline, Cloud Run jobs, monitoring alerts, and Secret Manager config are in this repository. `gcp_bq` keeps raw and clean data in BigQuery. See [processing-modes.md](processing-modes.md).

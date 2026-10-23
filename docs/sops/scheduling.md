@@ -12,6 +12,8 @@ The daily pipeline:
 
 All configuration is read from `config.enc.yaml` - no hardcoded settings.
 
+Cloud Run is included. `scripts/run_daily_etl.py` is the `gcp_bq` entry point (12-hour task timeout, stuck-execution alert at 6 hours). An unflagged nightly run processes yesterday, then missing days inside the Cloudflare retention window and a time budget.
+
 ## Quick Start
 
 ### Manual Run

@@ -2,7 +2,7 @@
 
 [![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
-[![Release](https://img.shields.io/badge/release-v2.1.3-brightgreen.svg)](CHANGELOG.md)
+[![Release](https://img.shields.io/badge/release-v2.2.0-brightgreen.svg)](CHANGELOG.md)
 
 A research framework and reporting pipeline for **server-side LLM activity tracking**, including our newly introduced
 **Query Fan-Out Session** tracking methodology.
@@ -64,28 +64,12 @@ This framework allows you to reproduce the research and create query-fanout-sess
 - **11 pre-built SQLite analytical views**: From daily KPIs to URL co-occurrence and freshness decay
 - **Local BigQuery modes**: `local_bq_buffered` (SQLite → BigQuery) and
   `local_bq_streaming` (in-memory → BigQuery) for cloud-ready local pipelines
+- **Cloud pipeline**: The full pipeline is open source, including BigQuery and Cloud Run. `gcp_bq` is the daily Cloud Run job (monitoring alerts, Secret Manager config, nightly auto-backfill, shared GCS scans of AWS logs with an optional host filter).
 - **Database migration tooling**: Idempotent v1→v2 schema migration with dry-run support
 
-## Enterprise: Managed Cloud Pipeline
+## Cloud pipeline
 
-For organizations needing production-grade LLM traffic analysis at scale:
-
-| Feature | Open Source | Enterprise |
-|---------|:-----------:|:----------:|
-| 8+ ingestion providers | ✓ | ✓ |
-| SQLite local analysis | ✓ | ✓ |
-| Multi-domain (SQLite per domain) | ✓ | ✓ |
-| Session analysis (MIBCS) | ✓ | ✓ |
-| Excel reporting | ✓ | ✓ |
-| Local BigQuery modes | ✓ | ✓ |
-| **GCP BigQuery cloud pipeline** | — | ✓ |
-| **Cloud Run automated scheduling** | — | ✓ |
-| **Looker Studio dashboards** | — | ✓ |
-| **Multi-domain cloud orchestration** | — | ✓ |
-| **Monitoring & alerting** | — | ✓ |
-| **Dedicated support** | — | ✓ |
-
-[Contact us](https://forms.gle/qoyLhf5K4p8399sG9) for enterprise pricing and implementation.
+The full pipeline is open source, including BigQuery and Cloud Run. `gcp_bq` runs the daily pipeline on Cloud Run with BigQuery storage, aggregations, dashboard queries, monitoring alerts, and Secret Manager config (`USE_SECRET_MANAGER=true`). An unflagged nightly run fills dates missing from BigQuery, skips days outside the Cloudflare retention window, and stops at a time budget. Domains that share a GCS prefix are downloaded once; an optional host filter splits a shared load balancer. Client secrets and per-client Terraform are not in this repository.
 
 ## Quick Start
 
@@ -242,6 +226,7 @@ See [docs/ingestion/](docs/ingestion/README.md) for provider-specific guides.
 | `local_sqlite` | SQLite | Local Python | None (default) |
 | `local_bq_buffered` | SQLite → BigQuery | Local Python | GCP project |
 | `local_bq_streaming` | Memory → BigQuery | Local Python | GCP project |
+| `gcp_bq` | BigQuery | Cloud Run | GCP project |
 
 ```bash
 export PROCESSING_MODE=local_sqlite   # default
@@ -295,13 +280,15 @@ Running `run_window_experiment.py` produces:
 ├── src/llm_bot_pipeline/
 │   ├── ingestion/       # Multi-provider log ingestion (8+ adapters, plugin registry)
 │   ├── cloudflare/      # Logpull API integration
-│   ├── storage/         # SQLite storage layer with migration support
-│   ├── pipeline/        # ETL processing (local SQLite and BigQuery modes)
+│   ├── aws/             # S3 to GCS log scans, including shared prefixes
+│   ├── storage/         # SQLite and BigQuery storage
+│   ├── pipeline/        # ETL, including the BigQuery daily pipeline and Cloud Run job
 │   ├── research/        # Window optimization, MIBCS, semantic embeddings
 │   ├── reporting/       # Session aggregation, Excel export, sitemap freshness
 │   ├── sitemap/         # Sitemap parsing and URL coverage tracking
 │   ├── schemas/         # Shared data schemas (CDN-agnostic)
-│   └── monitoring/      # Retry handling and data quality checks
+│   ├── infrastructure/  # BigQuery and Cloud Run setup
+│   └── monitoring/      # Data quality, retries, and alerts
 ├── scripts/             # CLI entry points
 │   └── migrations/      # Database schema migration scripts
 ├── docs/                # Documentation
@@ -430,5 +417,4 @@ Version 2.0 expands the framework from a Cloudflare-only research prototype to a
 production-ready pipeline supporting 8+ CDN providers, modular plugin architecture, and
 multi-domain SQLite analysis.
 
-For organizations requiring a fully managed cloud deployment (GCP BigQuery, Cloud Run,
-Looker Studio dashboards), [enterprise support is available](https://conversem.com/contact/).
+The full pipeline, including BigQuery and Cloud Run, is open source.

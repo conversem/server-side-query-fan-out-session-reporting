@@ -5,7 +5,7 @@ Set up Cloud Monitoring alert policies for a Cloud Run job.
 Usage:
     python scripts/setup_cloud_run_alerts.py \\
         --project-id <SOPS gcp.project_id> \\
-        --emails ruben@conversem.com
+        --emails operator@example.com
 
 --project-id and --emails are required. There are no project or email defaults.
 Client deployments must pass the live GCP project and recipient list.

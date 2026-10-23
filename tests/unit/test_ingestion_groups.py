@@ -20,13 +20,13 @@ def _aws(domain: str, prefix: str) -> DomainConfig:
 
 
 def test_shared_prefix_groups_together_around_other_providers():
-    shared = "gs://staging/alb/example/"
+    shared = "gs://staging/alb/logs/"
     domains = [
-        _aws("example.com", shared),
-        _aws("energielabel.nl", shared),
-        DomainConfig(domain="verbeterjehuis.nl", zone_id="z", provider="cloudflare"),
-        _aws("duurzaamleven.nl", shared + "/"),
-        _aws("energiehulpnetwerk.nl", shared),
+        _aws("one.example", shared),
+        _aws("two.example", shared),
+        DomainConfig(domain="three.example", zone_id="z", provider="cloudflare"),
+        _aws("four.example", shared + "/"),
+        _aws("five.example", shared),
         _aws("other.example", "gs://staging/alb/other/"),
     ]
 
@@ -34,11 +34,11 @@ def test_shared_prefix_groups_together_around_other_providers():
 
     assert [[domain.domain for domain in group] for group in groups] == [
         [
-            "example.com",
-            "energielabel.nl",
-            "duurzaamleven.nl",
-            "energiehulpnetwerk.nl",
+            "one.example",
+            "two.example",
+            "four.example",
+            "five.example",
         ],
-        ["verbeterjehuis.nl"],
+        ["three.example"],
         ["other.example"],
     ]

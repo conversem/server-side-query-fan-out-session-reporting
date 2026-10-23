@@ -14,7 +14,7 @@ from ..ingestion.providers.aws_alb.adapter import ALBAdapter
 from ..ingestion.providers.aws_cloudfront.adapter import CloudFrontAdapter
 from ..ingestion.registry import get_adapter
 from ..utils.bot_classifier import classify_bot
-from .gcs_log_streamer import stream_log_handles
+from .gcs_log_streamer import canonical_gcs_prefix, stream_log_handles
 from .raw_row_mapper import map_to_raw_row
 
 logger = logging.getLogger(__name__)
@@ -72,13 +72,14 @@ def pull_shared_aws_logs(
 
     aws_configs = [_aws_config(domain_config) for domain_config in domain_configs]
     source_types = {aws.source_type for aws in aws_configs}
-    prefixes = {aws.gcs_staging_prefix for aws in aws_configs}
+    prefixes = {canonical_gcs_prefix(aws.gcs_staging_prefix) for aws in aws_configs}
     if len(source_types) != 1 or len(prefixes) != 1:
         raise ValueError(
             "Shared AWS pull requires the same source_type and gcs_staging_prefix"
         )
 
     aws_cfg = aws_configs[0]
+    gcs_prefix = next(iter(prefixes))
     source_provider = f"aws_{aws_cfg.source_type}"
     if aws_cfg.source_type not in ("cloudfront", "alb"):
         raise ValueError(f"Unknown AWS source_type: {aws_cfg.source_type!r}")
@@ -92,7 +93,6 @@ def pull_shared_aws_logs(
             return adapter.parse_stream(handle)
         raise TypeError(f"Adapter {adapter!r} does not support stream parsing")
 
-    gcs_prefix = aws_cfg.gcs_staging_prefix
     # Extend the end by one day: a request near midnight can land in the next
     # day's object. The per-record timestamp check still bounds the output.
     scan_range = (start_date, end_date + timedelta(days=1))

@@ -44,7 +44,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install -e ".[dev,ml]"
+          pip install -e ".[dev,ml,gcp]"
 
       - name: Run tests (excluding BigQuery)
         run: |

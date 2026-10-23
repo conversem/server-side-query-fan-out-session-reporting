@@ -34,6 +34,16 @@ def _blob_partition_date(blob_name: str) -> Optional[date]:
         return None
 
 
+def canonical_gcs_prefix(gs_uri: str) -> str:
+    """Return a directory prefix with one trailing slash.
+
+    ``gs://bucket/logs`` and ``gs://bucket/logs/`` are the same scan.
+    The trailing slash stops a list of ``logs`` from also matching ``logs-other``.
+    """
+    trimmed = gs_uri.strip().rstrip("/")
+    return trimmed + "/"
+
+
 def _split_gs_uri(gs_uri: str) -> Tuple[str, str]:
     if not gs_uri.startswith("gs://"):
         raise ValueError(f"Expected gs:// URI, got {gs_uri!r}")

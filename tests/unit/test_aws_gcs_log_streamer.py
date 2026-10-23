@@ -109,7 +109,7 @@ def test_rejects_non_gs_prefix():
         list(stream_log_handles("s3://wrong-scheme/path/"))
 
 
-ALB_BASE = "alb/mc/AWSLogs/594802546463/elasticloadbalancing/eu-central-1"
+ALB_BASE = "alb/logs/AWSLogs/123456789012/elasticloadbalancing/eu-central-1"
 
 
 class TestBlobPartitionDate:
@@ -140,7 +140,7 @@ class TestDateRangeFiltering:
             mock_storage.Client.return_value = _fake_client_with_blobs(blobs)
             results = list(
                 stream_log_handles(
-                    "gs://bucket/alb/mc/",
+                    "gs://bucket/alb/logs/",
                     date_range=(date(2026, 7, 1), date(2026, 7, 2)),
                 )
             )
@@ -158,7 +158,7 @@ class TestDateRangeFiltering:
         blobs = self._blobs_across_days()
         with patch("llm_bot_pipeline.aws.gcs_log_streamer.storage") as mock_storage:
             mock_storage.Client.return_value = _fake_client_with_blobs(blobs)
-            results = list(stream_log_handles("gs://bucket/alb/mc/"))
+            results = list(stream_log_handles("gs://bucket/alb/logs/"))
         assert len(results) == 4
 
     def test_undated_blobs_always_included(self):

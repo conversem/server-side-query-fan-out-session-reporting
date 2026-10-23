@@ -1,6 +1,6 @@
 # Processing Modes
 
-The pipeline supports three open-source processing modes plus a premium cloud mode.
+The pipeline supports four open-source processing modes.
 Each mode defines where raw data is stored, how transformations run, and where clean
 output lands.
 
@@ -11,10 +11,9 @@ output lands.
 | `local_sqlite`       | SQLite   | Python/Pandas| SQLite       | Your machine  |
 | `local_bq_buffered`  | SQLite   | Python/Pandas| BigQuery     | Your machine  |
 | `local_bq_streaming` | Memory   | Pure Python  | BigQuery     | Your machine  |
-| `gcp_bq` *(Premium)* | BigQuery | BigQuery SQL | BigQuery     | GCP Cloud Run |
+| `gcp_bq` | BigQuery | BigQuery SQL | BigQuery     | GCP Cloud Run |
 
-> **Note:** The `gcp_bq` mode is part of the enterprise managed implementation.
-> See the [README](../README.md#enterprise-managed-cloud-pipeline) for details.
+> **Note:** `gcp_bq` is included. It runs on Cloud Run with BigQuery as raw storage, BigQuery SQL as the transform, and BigQuery as the clean output.
 
 ## Configuration
 
@@ -22,7 +21,7 @@ output lands.
 
 ```yaml
 pipeline:
-  processing_mode: local_sqlite  # local_sqlite | local_bq_buffered | local_bq_streaming
+  processing_mode: local_sqlite  # local_sqlite | local_bq_buffered | local_bq_streaming | gcp_bq
 ```
 
 ### Environment variable
@@ -110,13 +109,11 @@ result = run_pipeline(
 Settings validation automatically checks that required configuration is present for each
 mode:
 
-- `local_bq_buffered`, `local_bq_streaming`: require `gcp_project_id`
+- `local_bq_buffered`, `local_bq_streaming`, `gcp_bq`: require `gcp_project_id`
 - `local_sqlite`, `local_bq_buffered`: use SQLite (configured via `sqlite_db_path`)
 
-## Enterprise Cloud Mode
+## Cloud Run mode (`gcp_bq`)
 
 The `gcp_bq` mode runs the full pipeline on GCP Cloud Run Jobs with BigQuery as both
 raw and clean storage. This eliminates local compute entirely and supports automated
 daily scheduling via Cloud Scheduler.
-
-[Contact us](https://conversem.com/contact/) for enterprise implementation.

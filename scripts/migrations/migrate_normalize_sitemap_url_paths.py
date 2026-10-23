@@ -13,7 +13,7 @@ _fetched_at, and take the most recent lastmod when present.
 
 Usage:
     python scripts/migrations/migrate_normalize_sitemap_url_paths.py \\
-        --project milieu-centraal-1755859615893 --dataset bot_logs [--dry-run]
+        --project example-project --dataset bot_logs [--dry-run]
 
 Rollback:
     INSERT INTO `<project>.<dataset>.sitemap_urls`

@@ -10,8 +10,7 @@ produces analytics via Excel reports or database queries.
 Two execution modes are supported:
 
 1. **Local execution** — SQLite storage + Excel reports (zero cloud dependencies)
-2. **Cloud-native (Enterprise)** — BigQuery storage + Looker Studio dashboards on GCP
-   (available as a managed implementation; see [Enterprise](#enterprise-cloud-pipeline))
+2. **Cloud execution** — BigQuery daily pipeline on Cloud Run, with Looker Studio on the dashboard views (see [Cloud pipeline](#cloud-pipeline))
 
 ## Architecture Diagram
 
@@ -38,6 +37,7 @@ Two execution modes are supported:
                                            │                 │
                                            │ • Data Quality  │
                                            │ • Retry Handler │
+                                           │ • Alerts        │
                                            └─────────────────┘
 ```
 
@@ -46,15 +46,16 @@ Two execution modes are supported:
 ```
 src/llm_bot_pipeline/
 ├── ingestion/          Multi-provider log ingestion (8+ adapters)
-├── pipeline/           ETL orchestration (local + streaming paths)
-├── storage/            StorageBackend ABC + SQLite implementation
+├── pipeline/           ETL, including local modes and gcp_bq
+├── aws/                S3 to GCS log scans (shared prefix, optional host filter)
+├── storage/            SQLite and BigQuery backends
 ├── reporting/          Aggregations, sessions, sitemap, Excel export
-├── monitoring/         Data quality checks, retry handling
+├── monitoring/         Data quality, retries, and alerts
 ├── research/           Advanced analytics (temporal, fingerprint, refinement)
 ├── cloudflare/         Cloudflare-specific (Logpull API)
 ├── sitemap/            Sitemap XML parsing and freshness analysis
-├── config/             Settings, constants, SOPS loader
-├── infrastructure/     Backend stubs (extensible for custom backends)
+├── config/             Settings, SOPS, and Secret Manager
+├── infrastructure/     BigQuery setup, Cloud Run jobs, and alerts
 ├── schemas/            Data schemas (raw, clean, bundles, reporting)
 └── utils/              Bot classifier, URL/HTTP utilities
 ```
@@ -76,7 +77,7 @@ provider-specific formats into a universal `IngestionRecord` schema.
 
 ### `pipeline/` — ETL Orchestration
 
-Dual-mode transform pipeline: Python/Pandas for SQLite, extensible for other backends.
+Local Python transforms, plus gcp_bq (BigQuery SQL on Cloud Run).
 
 | Component | Purpose |
 |-----------|---------|
@@ -231,12 +232,9 @@ export PROCESSING_MODE=local_bq_streaming
 python scripts/run_pipeline.py --start-date 2025-01-01 --end-date 2025-01-07
 ```
 
-## Enterprise Cloud Pipeline
+## Cloud pipeline
 
-The enterprise tier adds a fully-managed cloud mode running on GCP Cloud Run Jobs
-with BigQuery as the backend and Looker Studio for dashboards.
-
-[Contact us](https://conversem.com/contact/) for enterprise implementation details.
+`gcp_bq` is part of this repository. It runs on Cloud Run Jobs with BigQuery as the backend. Looker Studio reads the dashboard views in [dashboard-guide.md](dashboard-guide.md). Monitoring alerts and Secret Manager config ship with the project.
 
 ## Data Flow
 
@@ -273,8 +271,8 @@ with BigQuery as the backend and Looker Studio for dashboards.
                      │                      │
               ┌──────▼──────┐        ┌──────▼──────┐
               │ Excel Export │        │ BigQuery    │
-              │ 7+ sheets   │        │ (local BQ   │
-              │ Sitemap data │        │  modes)     │
+              │ 7+ sheets    │        │ (local and  │
+              │ Sitemap data │        │  gcp_bq)    │
               └─────────────┘        └─────────────┘
 ```
 

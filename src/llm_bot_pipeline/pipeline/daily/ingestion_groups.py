@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
+from ...aws.gcs_log_streamer import canonical_gcs_prefix
 from ...config.settings import DomainConfig
 
 
@@ -17,7 +18,7 @@ def aws_scan_key(domain_config: DomainConfig) -> tuple[str, str] | None:
     aws = domain_config.aws
     if domain_config.provider != "aws_s3" or aws is None:
         return None
-    return (aws.source_type, aws.gcs_staging_prefix.rstrip("/"))
+    return (aws.source_type, canonical_gcs_prefix(aws.gcs_staging_prefix))
 
 
 def group_domains_for_ingestion(

@@ -326,12 +326,12 @@ def test_ensure_email_reuses_by_address_case_insensitive():
         name="projects/client_gcp_project/notificationChannels/9",
         type_="email",
         display_name="any-old-name",
-        labels={"email_address": "Ruben@conversem.com"},
+        labels={"email_address": "operator@example.com"},
     )
     client = MagicMock()
     client.list_notification_channels.return_value = [existing]
     names = ensure_email_channels(
-        "client_gcp_project", ["ruben@conversem.com"], channel_client=client
+        "client_gcp_project", ["operator@example.com"], channel_client=client
     )
     assert names == (existing.name,)
     client.create_notification_channel.assert_not_called()
